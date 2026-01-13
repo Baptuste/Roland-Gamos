@@ -20,11 +20,10 @@ Le projet est organisé en deux parties :
 src/
 ├── types/          # Modèles de données (Game, Player, Turn)
 ├── services/       # Logique métier (GameService, MusicBrainzService)
-├── server/         # Serveur WebSocket multijoueur
-│   ├── GameManager.ts      # Gestionnaire de parties
-│   ├── socketHandlers.ts    # Handlers WebSocket
-│   └── index.ts             # Serveur Express + Socket.io
-└── index.ts        # Point d'entrée et exemple d'utilisation
+└── server/         # Serveur WebSocket multijoueur
+    ├── GameManager.ts      # Gestionnaire de parties
+    ├── socketHandlers.ts    # Handlers WebSocket
+    └── index.ts             # Serveur Express + Socket.io
 ```
 
 ### Frontend (Interface utilisateur)

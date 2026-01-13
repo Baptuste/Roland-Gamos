@@ -2,6 +2,8 @@ node_modules/
 dist/
 *.log
 .env
+.env.local
+.env.production
 .DS_Store
 *.cache
 
@@ -17,3 +19,7 @@ frontend/node_modules/
 
 # OS
 Thumbs.db
+
+# Deployment
+.vercel
+.railway

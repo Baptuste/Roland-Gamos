@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { Game, Player } from '../shared/types';
 
-const SERVER_URL = (import.meta as any).env?.VITE_SERVER_URL || 'http://localhost:3001';
+const SERVER_URL = (import.meta.env.VITE_BACKEND_URL as string) || 'http://localhost:3001';
 
 export interface SocketEvents {
   // Événements émis par le client

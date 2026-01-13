@@ -2,12 +2,13 @@
   "name": "roland-gamos",
   "version": "1.0.0",
   "description": "Jeu multijoueur tour par tour sur le rap français avec validation MusicBrainz",
-  "main": "dist/index.js",
+  "main": "dist/server/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "tsc",
+    "build:frontend": "cd frontend && npm install && npm run build",
     "start": "node dist/server/index.js",
     "dev": "ts-node src/server/index.ts",
-    "dev:example": "ts-node src/index.ts",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:frontend\" --names \"backend,frontend\" --prefix-colors \"blue,green\"",
     "test": "jest"
