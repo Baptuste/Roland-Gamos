@@ -1,0 +1,19 @@
+node_modules/
+dist/
+*.log
+.env
+.DS_Store
+*.cache
+
+# Frontend build
+frontend/dist/
+frontend/node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
