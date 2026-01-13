@@ -1,7 +1,25 @@
 import { io, Socket } from 'socket.io-client';
 import { Game, Player } from '../shared/types';
 
-const SERVER_URL = (import.meta.env.VITE_BACKEND_URL as string) || 'http://localhost:3001';
+// Détecter automatiquement l'URL du serveur
+// En production (Railway), le frontend est servi par le même serveur, donc utiliser l'URL relative
+// En développement, utiliser localhost ou la variable d'environnement
+const getServerUrl = (): string => {
+  // Si une variable d'environnement est définie, l'utiliser
+  if (import.meta.env.VITE_BACKEND_URL) {
+    return import.meta.env.VITE_BACKEND_URL as string;
+  }
+  
+  // En production, utiliser l'URL relative (même serveur)
+  if (import.meta.env.PROD || window.location.hostname !== 'localhost') {
+    return window.location.origin;
+  }
+  
+  // En développement, utiliser localhost
+  return 'http://localhost:3001';
+};
+
+const SERVER_URL = getServerUrl();
 
 export interface SocketEvents {
   // Événements émis par le client

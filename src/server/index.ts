@@ -8,19 +8,7 @@ import { setupSocketHandlers } from './socketHandlers';
 
 const app = express();
 const httpServer = createServer(app);
-// Configuration CORS pour permettre les connexions depuis Vercel et localhost
-const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:3000',
-  'http://localhost:3000',
-  // Ajouter votre URL Vercel ici après déploiement
-  // 'https://roland-gamos.vercel.app',
-];
-
-// En production, accepter aussi tous les sous-domaines Vercel
-if (process.env.NODE_ENV === 'production') {
-  // Pattern pour accepter tous les .vercel.app
-}
-
+// Configuration CORS pour permettre les connexions depuis Railway, Vercel et localhost
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
@@ -28,10 +16,22 @@ const io = new Server(httpServer, {
       if (process.env.NODE_ENV === 'development' || !origin) {
         return callback(null, true);
       }
+      
       // En production, vérifier l'origine
-      if (allowedOrigins.includes(origin) || origin?.endsWith('.vercel.app')) {
+      // Accepter :
+      // - localhost (développement)
+      // - Domaines Railway (.up.railway.app)
+      // - Domaines Vercel (.vercel.app)
+      // - URL définie dans FRONTEND_URL
+      const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+      const isRailway = origin?.endsWith('.up.railway.app') || origin?.endsWith('.railway.app');
+      const isVercel = origin?.endsWith('.vercel.app');
+      const isAllowedOrigin = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
+      
+      if (isLocalhost || isRailway || isVercel || isAllowedOrigin) {
         callback(null, true);
       } else {
+        console.warn(`CORS: Origine rejetée: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -72,9 +72,16 @@ if (process.env.NODE_ENV === 'production') {
   // Toutes les routes non-API servent le frontend (SPA)
   app.get('*', (req: express.Request, res: express.Response) => {
     // Ne pas servir le frontend pour les routes API et WebSocket
+    // Ces routes doivent être gérées par leurs handlers respectifs
     if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+      // Si la route API n'existe pas, retourner 404
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: 'Route API non trouvée' });
+      }
+      // Pour socket.io, ne rien faire (géré par Socket.io)
       return;
     }
+    // Servir le frontend pour toutes les autres routes
     res.sendFile(path.join(frontendDistPath, 'index.html'));
   });
 }
