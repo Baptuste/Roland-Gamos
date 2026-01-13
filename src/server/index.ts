@@ -73,14 +73,20 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (req: express.Request, res: express.Response) => {
     // Ne pas servir le frontend pour les routes API et WebSocket
     // Ces routes doivent être gérées par leurs handlers respectifs
-    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+    if (req.path.startsWith('/api')) {
       // Si la route API n'existe pas, retourner 404
-      if (req.path.startsWith('/api')) {
-        return res.status(404).json({ error: 'Route API non trouvée' });
-      }
-      // Pour socket.io, ne rien faire (géré par Socket.io)
-      return;
+      return res.status(404).json({ error: 'Route API non trouvée' });
     }
+    
+    if (req.path.startsWith('/socket.io')) {
+      // Si une requête HTTP atteint le catch-all pour /socket.io,
+      // c'est probablement une requête invalide (Socket.io devrait l'intercepter)
+      // Retourner 400 Bad Request pour indiquer que ce n'est pas une route HTTP valide
+      return res.status(400).json({ 
+        error: 'Requête invalide. Utilisez WebSocket pour /socket.io' 
+      });
+    }
+    
     // Servir le frontend pour toutes les autres routes
     res.sendFile(path.join(frontendDistPath, 'index.html'));
   });

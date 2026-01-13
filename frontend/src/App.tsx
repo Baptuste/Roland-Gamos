@@ -32,51 +32,107 @@ function App() {
       // Attendre que la connexion soit établie
       let reconnectAttempted = false;
       let fallbackAttempted = false;
+      let maxAttempts = 10; // Maximum 5 secondes d'attente (10 * 500ms)
+      let attempts = 0;
+
+      const cleanupStorage = () => {
+        console.log('Partie introuvable, nettoyage du localStorage');
+        localStorage.removeItem(STORAGE_KEYS.GAME_CODE);
+        localStorage.removeItem(STORAGE_KEYS.PLAYER_ID);
+        localStorage.removeItem(STORAGE_KEYS.PLAYER_NAME);
+        localStorage.removeItem(STORAGE_KEYS.GAME_ID);
+      };
 
       const tryReconnect = () => {
+        attempts++;
+        
         if (socketService.isConnected() && !reconnectAttempted) {
           reconnectAttempted = true;
           console.log('Tentative de reconnexion automatique...', { storedGameCode, storedPlayerId });
           
-          // Écouter l'erreur de reconnexion pour essayer avec join-game
+          // Écouter les événements de succès et d'erreur
+          const successHandler = () => {
+            // Si on reçoit game-reconnected ou game-joined, la reconnexion a réussi
+            socketService.off('error', errorHandler);
+            socketService.off('game-reconnected', successHandler);
+            socketService.off('game-joined', successHandler);
+          };
+
           const errorHandler = (data: { message: string }) => {
-            if (data.message.includes('reconnect') && !fallbackAttempted) {
+            const message = data.message || '';
+            
+            // Si c'est une erreur de reconnexion et qu'on n'a pas encore essayé join-game
+            if (message.includes('reconnect') && !fallbackAttempted) {
               fallbackAttempted = true;
               console.log('Reconnexion directe échouée, tentative avec join-game...');
+              
+              // Écouter aussi les erreurs de join-game
+              const joinErrorHandler = (joinData: { message: string }) => {
+                const joinMessage = joinData.message || '';
+                if (joinMessage.includes('Code de partie invalide') || 
+                    joinMessage.includes('partie introuvable') ||
+                    joinMessage.includes('impossible')) {
+                  cleanupStorage();
+                  socketService.off('error', joinErrorHandler);
+                }
+              };
+              
+              socketService.on('error', joinErrorHandler);
+              
               // Essayer avec join-game en utilisant le nom stocké
               socketService.emit('join-game', {
                 gameCode: storedGameCode,
                 playerName: storedPlayerName,
               });
-              // Nettoyer le handler après utilisation
+              
+              // Nettoyer le handler après un délai
               setTimeout(() => {
-                socketService.off('error', errorHandler);
-              }, 1000);
-            } else if (data.message.includes('Code de partie invalide') || data.message.includes('partie introuvable')) {
-              // La partie n'existe plus, nettoyer le localStorage
-              console.log('Partie introuvable, nettoyage du localStorage');
-              localStorage.removeItem(STORAGE_KEYS.GAME_CODE);
-              localStorage.removeItem(STORAGE_KEYS.PLAYER_ID);
-              localStorage.removeItem(STORAGE_KEYS.PLAYER_NAME);
-              localStorage.removeItem(STORAGE_KEYS.GAME_ID);
+                socketService.off('error', joinErrorHandler);
+              }, 2000);
+            } 
+            // Si c'est une erreur indiquant que la partie n'existe plus
+            else if (message.includes('Code de partie invalide') || 
+                     message.includes('partie introuvable') ||
+                     message.includes('impossible')) {
+              cleanupStorage();
               socketService.off('error', errorHandler);
+              socketService.off('game-reconnected', successHandler);
+              socketService.off('game-joined', successHandler);
+              return;
             }
           };
 
+          // Écouter les succès
+          socketService.on('game-reconnected', successHandler);
+          socketService.on('game-joined', successHandler);
           socketService.on('error', errorHandler);
           
+          // Tenter la reconnexion
           socketService.emit('reconnect-game', {
             gameCode: storedGameCode,
             playerId: storedPlayerId,
           });
-        } else if (!socketService.isConnected()) {
+          
+          // Nettoyer les handlers après un délai si aucune réponse
+          setTimeout(() => {
+            socketService.off('error', errorHandler);
+            socketService.off('game-reconnected', successHandler);
+            socketService.off('game-joined', successHandler);
+          }, 3000);
+        } 
+        // Si la connexion n'est pas encore établie et qu'on n'a pas dépassé le maximum d'essais
+        else if (!socketService.isConnected() && attempts < maxAttempts) {
           // Réessayer après un court délai
           setTimeout(tryReconnect, 500);
+        } 
+        // Si on a dépassé le maximum d'essais, abandonner silencieusement
+        else if (attempts >= maxAttempts) {
+          console.log('Impossible de se connecter au serveur après plusieurs tentatives');
         }
       };
 
-      // Attendre un peu que la connexion soit établie
-      setTimeout(tryReconnect, 1000);
+      // Attendre que la connexion soit établie (délai initial plus long)
+      setTimeout(tryReconnect, 1500);
     }
   }, []);
 

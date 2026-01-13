@@ -61,16 +61,64 @@ export class SocketService {
    * Se connecter au serveur
    */
   connect(): void {
+    // Si déjà connecté, ne rien faire
     if (this.socket?.connected) {
       return;
     }
 
-    this.socket = io(SERVER_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-    });
+    // Si un socket existe mais n'est pas connecté, le laisser se reconnecter automatiquement
+    // Socket.io gère déjà la reconnexion automatique avec les options de configuration
+    // Ne pas fermer le socket manuellement car cela peut causer des erreurs si le socket
+    // est en train de se connecter
+    if (this.socket && !this.socket.connected) {
+      // Le socket existe mais n'est pas connecté
+      // Socket.io tentera automatiquement de se reconnecter grâce à l'option `reconnection: true`
+      // On réenregistre simplement les listeners et on laisse Socket.io gérer la reconnexion
+      this._registerListeners();
+      return;
+    }
+
+    // Créer un nouveau socket seulement si on n'en a pas déjà un
+    if (!this.socket) {
+      this.socket = io(SERVER_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+      });
+
+      // Configurer les listeners de base seulement pour un nouveau socket
+      // Ces listeners ne doivent être ajoutés qu'une seule fois
+      this.socket.on('connect', () => {
+        console.log('Connecté au serveur WebSocket');
+      });
+
+      this.socket.on('disconnect', () => {
+        console.log('Déconnecté du serveur WebSocket');
+      });
+
+      this.socket.on('error', (error: any) => {
+        // Ne pas logger toutes les erreurs, seulement celles importantes
+        // Les erreurs de reconnexion sont normales si la partie n'existe plus
+        const message = error?.message || '';
+        if (!message.includes('reconnect') && !message.includes('Code de partie invalide') && !message.includes('partie introuvable')) {
+          console.error('Erreur WebSocket:', error);
+        }
+      });
+
+      // Enregistrer tous les listeners existants
+      this._registerListeners();
+    }
+  }
+
+  /**
+   * Enregistre tous les listeners personnalisés sur le socket
+   * Méthode privée pour éviter la duplication de code
+   */
+  private _registerListeners(): void {
+    if (!this.socket) {
+      return;
+    }
 
     // Réenregistrer tous les listeners existants
     for (const [event, handlers] of this.listeners.entries()) {
@@ -78,23 +126,6 @@ export class SocketService {
         this.socket?.on(event, handler as any);
       });
     }
-
-    this.socket.on('connect', () => {
-      console.log('Connecté au serveur WebSocket');
-    });
-
-    this.socket.on('disconnect', () => {
-      console.log('Déconnecté du serveur WebSocket');
-    });
-
-    this.socket.on('error', (error: any) => {
-      // Ne pas logger toutes les erreurs, seulement celles importantes
-      // Les erreurs de reconnexion sont normales si la partie n'existe plus
-      const message = error?.message || '';
-      if (!message.includes('reconnect') && !message.includes('Code de partie invalide') && !message.includes('partie introuvable')) {
-        console.error('Erreur WebSocket:', error);
-      }
-    });
   }
 
   /**

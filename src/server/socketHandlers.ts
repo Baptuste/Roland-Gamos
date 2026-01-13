@@ -67,11 +67,20 @@ export function setupSocketHandlers(io: Server, gameManager: GameManager) {
     socket.on('reconnect-game', (data: { gameCode: string; playerId: string }) => {
       try {
         console.log(`Tentative de reconnexion avec code: ${data.gameCode}, playerId: ${data.playerId}`);
+        
+        // Vérifier d'abord si le code existe
+        const gameId = gameManager.getGameByCode(data.gameCode)?.id;
+        if (!gameId) {
+          console.log(`Code de partie invalide: ${data.gameCode}`);
+          socket.emit('error', { message: 'Code de partie invalide ou partie introuvable' });
+          return;
+        }
+        
         const result = gameManager.reconnectToGame(data.gameCode, data.playerId, socket.id);
         
         if (!result) {
-          console.log(`Impossible de se reconnecter avec le code: ${data.gameCode}`);
-          socket.emit('error', { message: 'Impossible de se reconnecter à la partie' });
+          console.log(`Impossible de se reconnecter: joueur ${data.playerId} non trouvé dans la partie ${gameId}`);
+          socket.emit('error', { message: 'Impossible de se reconnecter à la partie. Le joueur n\'existe pas dans cette partie.' });
           return;
         }
 
