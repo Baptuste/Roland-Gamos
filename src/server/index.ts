@@ -5,6 +5,7 @@ import cors from 'cors';
 import path from 'path';
 import { GameManager } from './GameManager';
 import { setupSocketHandlers } from './socketHandlers';
+import { soloManager } from './SoloManager';
 
 const app = express();
 const httpServer = createServer(app);
@@ -58,6 +59,61 @@ app.get('/api/game/:gameId', (req: express.Request, res: express.Response) => {
 // Health check endpoint pour Railway
 app.get('/health', (req: express.Request, res: express.Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// API REST pour le mode Solo Infini
+app.post('/api/solo/infinite/start', async (req: express.Request, res: express.Response) => {
+  try {
+    const { playerName } = req.body;
+    
+    if (!playerName || typeof playerName !== 'string' || playerName.trim().length === 0) {
+      return res.status(400).json({ error: 'Le nom du joueur est requis' });
+    }
+
+    const run = await soloManager.startRun(playerName.trim());
+    res.json({ run });
+  } catch (error: any) {
+    console.error('Erreur lors de la création de la run solo:', error);
+    res.status(500).json({ error: 'Erreur lors de la création de la run solo' });
+  }
+});
+
+app.post('/api/solo/infinite/move', async (req: express.Request, res: express.Response) => {
+  try {
+    const { runId, artistName } = req.body;
+    
+    if (!runId || typeof runId !== 'string') {
+      return res.status(400).json({ error: 'L\'ID de la run est requis' });
+    }
+    
+    if (!artistName || typeof artistName !== 'string' || artistName.trim().length === 0) {
+      return res.status(400).json({ error: 'Le nom de l\'artiste est requis' });
+    }
+
+    const result = await soloManager.makeMove(runId, artistName.trim());
+    res.json(result);
+  } catch (error: any) {
+    console.error('Erreur lors du traitement du coup:', error);
+    if (error.message && error.message.includes('introuvable')) {
+      return res.status(404).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Erreur lors du traitement du coup' });
+  }
+});
+
+app.get('/api/solo/infinite/run/:id', (req: express.Request, res: express.Response) => {
+  try {
+    const run = soloManager.getRun(req.params.id);
+    
+    if (!run) {
+      return res.status(404).json({ error: 'Run introuvable' });
+    }
+    
+    res.json({ run });
+  } catch (error: any) {
+    console.error('Erreur lors de la récupération de la run:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération de la run' });
+  }
 });
 
 // Configuration des handlers WebSocket

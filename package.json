@@ -11,7 +11,11 @@
     "dev": "ts-node src/server/index.ts",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:frontend\" --names \"backend,frontend\" --prefix-colors \"blue,green\"",
-    "test": "jest"
+    "test": "jest",
+    "popularity:ingest": "ts-node src/jobs/popularity/scripts/runIngestJob.ts",
+    "popularity:score": "ts-node src/jobs/popularity/scripts/runScoreJob.ts",
+    "popularity:quantiles": "ts-node src/jobs/popularity/scripts/runQuantilesJob.ts",
+    "popularity:all": "npm run popularity:ingest && npm run popularity:score && npm run popularity:quantiles"
   },
   "keywords": [
     "game",

@@ -52,24 +52,6 @@ export default function MultiplayerGameScreen({
     return () => clearInterval(interval);
   }, [game.currentTurnEndsAt, game.status]);
 
-  // Logs de débogage désactivés pour réduire la pollution de la console
-  // Si besoin de déboguer, décommenter le code ci-dessous
-  // const prevGameStateRef = useRef<{ status: string; currentPlayerIndex: number; playersLength: number } | null>(null);
-  // useEffect(() => {
-  //   const currentState = {
-  //     status: game.status,
-  //     currentPlayerIndex: game.currentPlayerIndex,
-  //     playersLength: game.players.length,
-  //   };
-  //   if (!prevGameStateRef.current || 
-  //       prevGameStateRef.current.status !== currentState.status ||
-  //       prevGameStateRef.current.currentPlayerIndex !== currentState.currentPlayerIndex ||
-  //       prevGameStateRef.current.playersLength !== currentState.playersLength) {
-  //     console.log('État du jeu mis à jour:', currentState);
-  //     prevGameStateRef.current = currentState;
-  //   }
-  // }, [game.status, game.currentPlayerIndex, game.players.length]);
-
   useEffect(() => {
     // Écouter les mises à jour de la partie
     const handleGameUpdated = (data: {
@@ -90,10 +72,6 @@ export default function MultiplayerGameScreen({
     };
 
     const handleGameStarted = (data: { game: Game }) => {
-      console.log('Partie démarrée, état:', data.game);
-      console.log('CurrentPlayerIndex:', data.game.currentPlayerIndex);
-      console.log('Joueur actuel:', data.game.players[data.game.currentPlayerIndex]?.name);
-      console.log('Mon ID:', currentPlayerId);
       setGame(data.game);
       // Réinitialiser les états pour le nouveau tour
       setArtistName('');
@@ -102,7 +80,6 @@ export default function MultiplayerGameScreen({
     };
 
     const handleGameReset = (data: { game: Game; gameCode: string }) => {
-      console.log('Partie réinitialisée, retour au salon:', data.game, 'code:', data.gameCode);
       setGame(data.game);
       setArtistName('');
       setIsSubmitting(false);
@@ -132,7 +109,6 @@ export default function MultiplayerGameScreen({
     });
 
     socketService.on('game-reconnected', (data) => {
-      console.log('Reconnexion réussie dans MultiplayerGameScreen:', data);
       setGame(data.game);
     });
 

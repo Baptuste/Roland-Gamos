@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import MultiplayerHomeScreen from './screens/MultiplayerHomeScreen';
 import MultiplayerGameScreen from './screens/MultiplayerGameScreen';
+import SoloInfiniteScreen from './screens/SoloInfiniteScreen';
 import { Game, Player, GameStatus } from './shared/types';
 import { socketService } from './services/socketService';
 
@@ -16,6 +17,7 @@ function App() {
   const [currentGame, setCurrentGame] = useState<Game | null>(null);
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
   const [gameCode, setGameCode] = useState<string | null>(null);
+  const [soloPlayerName, setSoloPlayerName] = useState<string | null>(null);
 
   useEffect(() => {
     // Se connecter au serveur au démarrage
@@ -36,7 +38,6 @@ function App() {
       let attempts = 0;
 
       const cleanupStorage = () => {
-        console.log('Partie introuvable, nettoyage du localStorage');
         localStorage.removeItem(STORAGE_KEYS.GAME_CODE);
         localStorage.removeItem(STORAGE_KEYS.PLAYER_ID);
         localStorage.removeItem(STORAGE_KEYS.PLAYER_NAME);
@@ -48,7 +49,6 @@ function App() {
         
         if (socketService.isConnected() && !reconnectAttempted) {
           reconnectAttempted = true;
-          console.log('Tentative de reconnexion automatique...', { storedGameCode, storedPlayerId });
           
           // Écouter les événements de succès et d'erreur
           const successHandler = () => {
@@ -64,7 +64,6 @@ function App() {
             // Si c'est une erreur de reconnexion et qu'on n'a pas encore essayé join-game
             if (message.includes('reconnect') && !fallbackAttempted) {
               fallbackAttempted = true;
-              console.log('Reconnexion directe échouée, tentative avec join-game...');
               
               // Écouter aussi les erreurs de join-game
               const joinErrorHandler = (joinData: { message: string }) => {
@@ -127,7 +126,6 @@ function App() {
         } 
         // Si on a dépassé le maximum d'essais, abandonner silencieusement
         else if (attempts >= maxAttempts) {
-          console.log('Impossible de se connecter au serveur après plusieurs tentatives');
         }
       };
 
@@ -197,7 +195,6 @@ function App() {
     };
 
     const handleGameReconnected = (data: { player: Player; game: Game }) => {
-      console.log('Reconnexion réussie:', data);
       setCurrentGame(data.game);
       setCurrentPlayer(data.player);
       // Stocker les informations pour la prochaine reconnexion
@@ -263,12 +260,27 @@ function App() {
   const handleBackToHome = () => {
     setCurrentGame(null);
     setCurrentPlayer(null);
+    setSoloPlayerName(null);
     // Ne pas effacer le localStorage - permettre la reconnexion
     // localStorage.removeItem(STORAGE_KEYS.GAME_CODE);
     // localStorage.removeItem(STORAGE_KEYS.PLAYER_ID);
     // localStorage.removeItem(STORAGE_KEYS.PLAYER_NAME);
     // localStorage.removeItem(STORAGE_KEYS.GAME_ID);
   };
+
+  const handleStartSolo = (playerName: string) => {
+    setSoloPlayerName(playerName);
+  };
+
+  // Si on a une run solo en cours, afficher l'écran solo
+  if (soloPlayerName) {
+    return (
+      <SoloInfiniteScreen
+        playerName={soloPlayerName}
+        onBackToHome={handleBackToHome}
+      />
+    );
+  }
 
   // Si on a une partie et un joueur, afficher l'écran approprié
   if (currentGame && currentPlayer) {
@@ -277,6 +289,7 @@ function App() {
       return (
         <MultiplayerHomeScreen
           onGameJoined={handleGameJoined}
+          onBackToHome={handleBackToHome}
           initialGame={currentGame}
           initialPlayer={currentPlayer}
           initialGameCode={gameCode}
@@ -293,7 +306,7 @@ function App() {
     );
   }
 
-  return <MultiplayerHomeScreen onGameJoined={handleGameJoined} />;
+  return <MultiplayerHomeScreen onGameJoined={handleGameJoined} onStartSolo={handleStartSolo} onBackToHome={handleBackToHome} />;
 }
 
 export default App;

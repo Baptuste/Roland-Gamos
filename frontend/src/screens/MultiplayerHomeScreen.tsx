@@ -5,6 +5,8 @@ import '../styles/HomeScreen.css';
 
 interface MultiplayerHomeScreenProps {
   onGameJoined: (game: Game, player: Player, code?: string) => void;
+  onStartSolo?: (playerName: string) => void;
+  onBackToHome?: () => void;
   initialGame?: Game | null;
   initialPlayer?: Player | null;
   initialGameCode?: string | null;
@@ -12,6 +14,8 @@ interface MultiplayerHomeScreenProps {
 
 export default function MultiplayerHomeScreen({
   onGameJoined,
+  onStartSolo,
+  onBackToHome,
   initialGame = null,
   initialPlayer = null,
   initialGameCode = null,
@@ -24,6 +28,21 @@ export default function MultiplayerHomeScreen({
   const [currentGame, setCurrentGame] = useState<Game | null>(initialGame);
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(initialPlayer);
   const [createdGameCode, setCreatedGameCode] = useState<string | null>(initialGameCode);
+
+  // Auto-remplissage du dernier nom utilisé depuis localStorage
+  useEffect(() => {
+    const lastPlayerName = localStorage.getItem('lastPlayerName');
+    if (lastPlayerName && !playerName) {
+      setPlayerName(lastPlayerName);
+    }
+  }, []);
+
+  // Sauvegarder le nom dans localStorage quand il change
+  useEffect(() => {
+    if (playerName.trim()) {
+      localStorage.setItem('lastPlayerName', playerName.trim());
+    }
+  }, [playerName]);
 
   // Mettre à jour l'état local si les props changent
   useEffect(() => {
@@ -41,7 +60,6 @@ export default function MultiplayerHomeScreen({
   // Demander le code si on a une partie mais pas de code
   useEffect(() => {
     if (currentGame && !createdGameCode) {
-      console.log('Demande du code pour la partie:', currentGame.id);
       socketService.emit('get-game-code', { gameId: currentGame.id });
     }
   }, [currentGame?.id, createdGameCode]);
@@ -64,7 +82,6 @@ export default function MultiplayerHomeScreen({
     });
 
     socketService.on('game-reconnected', (data) => {
-      console.log('Reconnexion réussie dans MultiplayerHomeScreen:', data);
       setCurrentPlayer(data.player);
       setCurrentGame(data.game);
       setIsConnecting(false);
@@ -79,7 +96,6 @@ export default function MultiplayerHomeScreen({
 
     socketService.on('game-reset', (data) => {
       // Logs réduits pour éviter la pollution de la console
-      // console.log('game-reset reçu:', data);
       setCurrentGame(data.game);
       if (data.gameCode) {
         setCreatedGameCode(data.gameCode);
@@ -105,10 +121,8 @@ export default function MultiplayerHomeScreen({
     });
 
     const handleGameCode = (data: { gameId: string; gameCode: string }) => {
-      console.log('game-code reçu:', data);
       setCurrentGame((prevGame) => {
         if (prevGame && data.gameId === prevGame.id) {
-          console.log('Code de partie mis à jour:', data.gameCode);
           setCreatedGameCode(data.gameCode);
         }
         return prevGame;
@@ -140,7 +154,6 @@ export default function MultiplayerHomeScreen({
 
     socketService.on('player-joined', (data) => {
       // Logs réduits
-      // console.log('player-joined reçu:', data);
       setCurrentGame(data.game);
       // Mettre à jour aussi le joueur actuel si nécessaire
       setCurrentPlayer((prevPlayer) => {
@@ -317,6 +330,24 @@ export default function MultiplayerHomeScreen({
                 </p>
               )}
 
+              {/* Bouton Accueil */}
+              {onBackToHome && (
+                <div className="mt-3">
+                  <button
+                    className="btn btn-secondary w-full"
+                    onClick={() => {
+                      // Quitter la partie et revenir à l'accueil
+                      setCurrentGame(null);
+                      setCurrentPlayer(null);
+                      setCreatedGameCode(null);
+                      onBackToHome();
+                    }}
+                  >
+                    🏠 Retour à l'accueil
+                  </button>
+                </div>
+              )}
+
               <div className="share-section mt-3">
                 <p className="share-label">Partager le code de la partie :</p>
                 <div className="share-input-row">
@@ -326,7 +357,6 @@ export default function MultiplayerHomeScreen({
                     value={createdGameCode || ''}
                     readOnly
                     maxLength={6}
-                    data-debug-code={createdGameCode || 'null'}
                   />
                   <button
                     className="btn btn-secondary"
@@ -422,6 +452,36 @@ export default function MultiplayerHomeScreen({
                 ? 'Créer la partie'
                 : 'Rejoindre la partie'}
             </button>
+
+            {onStartSolo && (
+              <div className="solo-section mt-4">
+                <div className="divider">
+                  <span>OU</span>
+                </div>
+                <button
+                  className="btn btn-secondary w-full mt-3"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const trimmedName = playerName.trim();
+                    if (trimmedName) {
+                      onStartSolo(trimmedName);
+                    }
+                  }}
+                  disabled={!playerName.trim() || isConnecting}
+                  type="button"
+                >
+                  🎯 Solo Infini
+                </button>
+                <p className="form-hint mt-2">
+                  Mode solo avec scoring. Enchaînez les artistes pour obtenir le meilleur score !
+                </p>
+                {!playerName.trim() && (
+                  <p className="form-hint mt-1" style={{ color: '#ff6b6b', fontSize: '0.85rem', fontWeight: '600' }}>
+                    ⚠️ Entrez votre nom ci-dessus pour activer le mode solo
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
