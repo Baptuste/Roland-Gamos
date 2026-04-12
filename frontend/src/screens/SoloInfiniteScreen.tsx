@@ -1,6 +1,8 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent } from 'react';
 import { SoloRunStatus } from '../shared/types';
 import { useSoloInfiniteGame } from '../hooks/useSoloInfiniteGame';
+import { saveToLeaderboard } from './LeaderboardScreen';
+import { updateStats } from './StatsScreen';
 import '../styles/GameScreen.css';
 
 interface SoloInfiniteScreenProps {
@@ -16,6 +18,17 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
     message: string;
     isValid: boolean;
   } | null>(null);
+  const statsSavedRef = useRef(false);
+
+  // Sauvegarder les scores quand la partie se termine
+  useEffect(() => {
+    if (run && run.status === SoloRunStatus.FINISHED && !statsSavedRef.current) {
+      statsSavedRef.current = true;
+      const turns = run.currentTurn - 1;
+      saveToLeaderboard(playerName, run.totalScore, turns, 'Solo Infini');
+      updateStats({ mode: 'solo', score: run.totalScore, turns });
+    }
+  }, [run?.status]);
 
   // Démarrer la run au montage
   useEffect(() => {

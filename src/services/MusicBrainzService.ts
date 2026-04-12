@@ -423,6 +423,37 @@ export class MusicBrainzService {
   }
 
   /**
+   * Résout un artiste par son MBID et retourne son identité canonique
+   */
+  async resolveArtistByMbid(mbid: string): Promise<{ mbid: string; canonicalName: string; aliases: string[] } | null> {
+    try {
+      const response = await this.retry(async () => {
+        return await this.client.get(`/artist/${mbid}`, {
+          params: {
+            fmt: 'json',
+            inc: 'aliases',
+          },
+        });
+      });
+
+      if (!response || !response.data) {
+        return null;
+      }
+
+      const aliases = response.data.aliases?.map((a: any) => a.name) || [];
+
+      return {
+        mbid: response.data.id,
+        canonicalName: response.data.name,
+        aliases,
+      };
+    } catch (error) {
+      console.error(`Erreur lors de la résolution de l'artiste par MBID ${mbid}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Génère une clé de cache normalisée (ordre alphabétique)
    */
   private getCacheKey(artist1: string, artist2: string): string {

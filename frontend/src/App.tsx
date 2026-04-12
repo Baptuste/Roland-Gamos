@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import MultiplayerHomeScreen from './screens/MultiplayerHomeScreen';
 import MultiplayerGameScreen from './screens/MultiplayerGameScreen';
 import SoloInfiniteScreen from './screens/SoloInfiniteScreen';
+import SoloBotScreen from './screens/SoloBotScreen';
+import LeaderboardScreen from './screens/LeaderboardScreen';
+import StatsScreen from './screens/StatsScreen';
 import { Game, Player, GameStatus } from './shared/types';
 import { socketService } from './services/socketService';
 
@@ -13,11 +16,14 @@ const STORAGE_KEYS = {
   GAME_ID: 'roland-gamos-game-id',
 };
 
+type Screen = 'home' | 'solo' | 'bot' | 'leaderboard' | 'stats' | 'multiplayer';
+
 function App() {
   const [currentGame, setCurrentGame] = useState<Game | null>(null);
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
   const [gameCode, setGameCode] = useState<string | null>(null);
   const [soloPlayerName, setSoloPlayerName] = useState<string | null>(null);
+  const [currentScreen, setCurrentScreen] = useState<Screen>('home');
 
   useEffect(() => {
     // Se connecter au serveur au démarrage
@@ -31,10 +37,9 @@ function App() {
     const storedPlayerName = localStorage.getItem(STORAGE_KEYS.PLAYER_NAME);
 
     if (storedGameCode && storedPlayerId && storedPlayerName) {
-      // Attendre que la connexion soit établie
       let reconnectAttempted = false;
       let fallbackAttempted = false;
-      let maxAttempts = 10; // Maximum 5 secondes d'attente (10 * 500ms)
+      let maxAttempts = 10;
       let attempts = 0;
 
       const cleanupStorage = () => {
@@ -46,13 +51,11 @@ function App() {
 
       const tryReconnect = () => {
         attempts++;
-        
+
         if (socketService.isConnected() && !reconnectAttempted) {
           reconnectAttempted = true;
-          
-          // Écouter les événements de succès et d'erreur
+
           const successHandler = () => {
-            // Si on reçoit game-reconnected ou game-joined, la reconnexion a réussi
             socketService.off('error', errorHandler);
             socketService.off('game-reconnected', successHandler);
             socketService.off('game-joined', successHandler);
@@ -60,39 +63,32 @@ function App() {
 
           const errorHandler = (data: { message: string }) => {
             const message = data.message || '';
-            
-            // Si c'est une erreur de reconnexion et qu'on n'a pas encore essayé join-game
+
             if (message.includes('reconnect') && !fallbackAttempted) {
               fallbackAttempted = true;
-              
-              // Écouter aussi les erreurs de join-game
+
               const joinErrorHandler = (joinData: { message: string }) => {
                 const joinMessage = joinData.message || '';
-                if (joinMessage.includes('Code de partie invalide') || 
+                if (joinMessage.includes('Code de partie invalide') ||
                     joinMessage.includes('partie introuvable') ||
                     joinMessage.includes('impossible')) {
                   cleanupStorage();
                   socketService.off('error', joinErrorHandler);
                 }
               };
-              
+
               socketService.on('error', joinErrorHandler);
-              
-              // Essayer avec join-game en utilisant le nom stocké
               socketService.emit('join-game', {
                 gameCode: storedGameCode,
                 playerName: storedPlayerName,
               });
-              
-              // Nettoyer le handler après un délai
+
               setTimeout(() => {
                 socketService.off('error', joinErrorHandler);
               }, 2000);
-            } 
-            // Si c'est une erreur indiquant que la partie n'existe plus
-            else if (message.includes('Code de partie invalide') || 
-                     message.includes('partie introuvable') ||
-                     message.includes('impossible')) {
+            } else if (message.includes('Code de partie invalide') ||
+                       message.includes('partie introuvable') ||
+                       message.includes('impossible')) {
               cleanupStorage();
               socketService.off('error', errorHandler);
               socketService.off('game-reconnected', successHandler);
@@ -101,35 +97,25 @@ function App() {
             }
           };
 
-          // Écouter les succès
           socketService.on('game-reconnected', successHandler);
           socketService.on('game-joined', successHandler);
           socketService.on('error', errorHandler);
-          
-          // Tenter la reconnexion
+
           socketService.emit('reconnect-game', {
             gameCode: storedGameCode,
             playerId: storedPlayerId,
           });
-          
-          // Nettoyer les handlers après un délai si aucune réponse
+
           setTimeout(() => {
             socketService.off('error', errorHandler);
             socketService.off('game-reconnected', successHandler);
             socketService.off('game-joined', successHandler);
           }, 3000);
-        } 
-        // Si la connexion n'est pas encore établie et qu'on n'a pas dépassé le maximum d'essais
-        else if (!socketService.isConnected() && attempts < maxAttempts) {
-          // Réessayer après un court délai
+        } else if (!socketService.isConnected() && attempts < maxAttempts) {
           setTimeout(tryReconnect, 500);
-        } 
-        // Si on a dépassé le maximum d'essais, abandonner silencieusement
-        else if (attempts >= maxAttempts) {
         }
       };
 
-      // Attendre que la connexion soit établie (délai initial plus long)
       setTimeout(tryReconnect, 1500);
     }
   }, []);
@@ -139,10 +125,8 @@ function App() {
     if (!currentGame || !currentPlayer) return;
 
     const handleGameUpdated = (data: { game: Game }) => {
-      // Mettre à jour l'état de la partie si c'est la même partie
       if (data.game.id === currentGame.id) {
         setCurrentGame(data.game);
-        // S'assurer que currentPlayer existe toujours dans la partie mise à jour
         const updatedPlayer = data.game.players.find(p => p.id === currentPlayer.id);
         if (updatedPlayer) {
           setCurrentPlayer(updatedPlayer);
@@ -151,10 +135,8 @@ function App() {
     };
 
     const handleGameStarted = (data: { game: Game }) => {
-      // Mettre à jour l'état de la partie si c'est la même partie
       if (data.game.id === currentGame.id) {
         setCurrentGame(data.game);
-        // S'assurer que currentPlayer existe toujours dans la partie mise à jour
         const updatedPlayer = data.game.players.find(p => p.id === currentPlayer.id);
         if (updatedPlayer) {
           setCurrentPlayer(updatedPlayer);
@@ -163,14 +145,11 @@ function App() {
     };
 
     const handleGameState = (data: { game: Game; gameCode?: string }) => {
-      // Mettre à jour l'état de la partie si c'est la même partie
       if (data.game.id === currentGame.id) {
         setCurrentGame(data.game);
-        // Stocker le code si présent
         if (data.gameCode) {
           setGameCode(data.gameCode);
         }
-        // S'assurer que currentPlayer existe toujours dans la partie mise à jour
         const updatedPlayer = data.game.players.find(p => p.id === currentPlayer.id);
         if (updatedPlayer) {
           setCurrentPlayer(updatedPlayer);
@@ -179,14 +158,11 @@ function App() {
     };
 
     const handleGameReset = (data: { game: Game; gameCode: string }) => {
-      // Mettre à jour l'état de la partie si c'est la même partie
       if (data.game.id === currentGame.id) {
         setCurrentGame(data.game);
-        // Stocker le code de la partie
         if (data.gameCode) {
           setGameCode(data.gameCode);
         }
-        // S'assurer que currentPlayer existe toujours dans la partie mise à jour
         const updatedPlayer = data.game.players.find(p => p.id === currentPlayer.id);
         if (updatedPlayer) {
           setCurrentPlayer(updatedPlayer);
@@ -197,14 +173,12 @@ function App() {
     const handleGameReconnected = (data: { player: Player; game: Game }) => {
       setCurrentGame(data.game);
       setCurrentPlayer(data.player);
-      // Stocker les informations pour la prochaine reconnexion
-      const gameCode = localStorage.getItem(STORAGE_KEYS.GAME_CODE);
-      if (gameCode) {
-        setGameCode(gameCode);
+      const storedCode = localStorage.getItem(STORAGE_KEYS.GAME_CODE);
+      if (storedCode) {
+        setGameCode(storedCode);
       }
-      // S'assurer que les données sont bien stockées
-      if (gameCode && data.player.id) {
-        localStorage.setItem(STORAGE_KEYS.GAME_CODE, gameCode);
+      if (storedCode && data.player.id) {
+        localStorage.setItem(STORAGE_KEYS.GAME_CODE, storedCode);
         localStorage.setItem(STORAGE_KEYS.PLAYER_ID, data.player.id);
         localStorage.setItem(STORAGE_KEYS.PLAYER_NAME, data.player.name);
         localStorage.setItem(STORAGE_KEYS.GAME_ID, data.game.id);
@@ -212,14 +186,11 @@ function App() {
     };
 
     const handleGameJoined = (data: { player: Player; game: Game }) => {
-      // Si c'est une reconnexion via join-game, mettre à jour les données
       const storedCode = localStorage.getItem(STORAGE_KEYS.GAME_CODE);
       if (storedCode && data.game.id) {
-        // C'est probablement une reconnexion réussie via join-game
         setCurrentGame(data.game);
         setCurrentPlayer(data.player);
         setGameCode(storedCode);
-        // Mettre à jour le localStorage avec les nouvelles données
         localStorage.setItem(STORAGE_KEYS.GAME_CODE, storedCode);
         localStorage.setItem(STORAGE_KEYS.PLAYER_ID, data.player.id);
         localStorage.setItem(STORAGE_KEYS.PLAYER_NAME, data.player.name);
@@ -247,9 +218,9 @@ function App() {
   const handleGameJoined = (game: Game, player: Player, code?: string) => {
     setCurrentGame(game);
     setCurrentPlayer(player);
+    setCurrentScreen('multiplayer');
     if (code) {
       setGameCode(code);
-      // Stocker les informations pour la reconnexion
       localStorage.setItem(STORAGE_KEYS.GAME_CODE, code);
       localStorage.setItem(STORAGE_KEYS.PLAYER_ID, player.id);
       localStorage.setItem(STORAGE_KEYS.PLAYER_NAME, player.name);
@@ -261,19 +232,30 @@ function App() {
     setCurrentGame(null);
     setCurrentPlayer(null);
     setSoloPlayerName(null);
-    // Ne pas effacer le localStorage - permettre la reconnexion
-    // localStorage.removeItem(STORAGE_KEYS.GAME_CODE);
-    // localStorage.removeItem(STORAGE_KEYS.PLAYER_ID);
-    // localStorage.removeItem(STORAGE_KEYS.PLAYER_NAME);
-    // localStorage.removeItem(STORAGE_KEYS.GAME_ID);
+    setCurrentScreen('home');
   };
 
   const handleStartSolo = (playerName: string) => {
     setSoloPlayerName(playerName);
+    setCurrentScreen('solo');
   };
 
-  // Si on a une run solo en cours, afficher l'écran solo
-  if (soloPlayerName) {
+  const handleStartBot = (playerName: string) => {
+    setSoloPlayerName(playerName);
+    setCurrentScreen('bot');
+  };
+
+  // Écrans secondaires
+  if (currentScreen === 'leaderboard') {
+    return <LeaderboardScreen onBackToHome={handleBackToHome} />;
+  }
+
+  if (currentScreen === 'stats') {
+    return <StatsScreen onBackToHome={handleBackToHome} />;
+  }
+
+  // Solo infini
+  if (currentScreen === 'solo' && soloPlayerName) {
     return (
       <SoloInfiniteScreen
         playerName={soloPlayerName}
@@ -282,21 +264,33 @@ function App() {
     );
   }
 
-  // Si on a une partie et un joueur, afficher l'écran approprié
+  // Solo vs Bot
+  if (currentScreen === 'bot' && soloPlayerName) {
+    return (
+      <SoloBotScreen
+        playerName={soloPlayerName}
+        onBackToHome={handleBackToHome}
+      />
+    );
+  }
+
+  // Multijoueur - partie en cours
   if (currentGame && currentPlayer) {
-    // Si la partie est en attente, afficher le salon d'attente
     if (currentGame.status === GameStatus.WAITING) {
       return (
         <MultiplayerHomeScreen
           onGameJoined={handleGameJoined}
           onBackToHome={handleBackToHome}
+          onStartSolo={handleStartSolo}
+          onStartBot={handleStartBot}
+          onShowLeaderboard={() => setCurrentScreen('leaderboard')}
+          onShowStats={() => setCurrentScreen('stats')}
           initialGame={currentGame}
           initialPlayer={currentPlayer}
           initialGameCode={gameCode}
         />
       );
     }
-    // Sinon, afficher l'écran de jeu
     return (
       <MultiplayerGameScreen
         game={currentGame}
@@ -306,7 +300,17 @@ function App() {
     );
   }
 
-  return <MultiplayerHomeScreen onGameJoined={handleGameJoined} onStartSolo={handleStartSolo} onBackToHome={handleBackToHome} />;
+  // Accueil
+  return (
+    <MultiplayerHomeScreen
+      onGameJoined={handleGameJoined}
+      onStartSolo={handleStartSolo}
+      onStartBot={handleStartBot}
+      onShowLeaderboard={() => setCurrentScreen('leaderboard')}
+      onShowStats={() => setCurrentScreen('stats')}
+      onBackToHome={handleBackToHome}
+    />
+  );
 }
 
 export default App;

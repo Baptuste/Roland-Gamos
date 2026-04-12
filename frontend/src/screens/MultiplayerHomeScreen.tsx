@@ -6,6 +6,9 @@ import '../styles/HomeScreen.css';
 interface MultiplayerHomeScreenProps {
   onGameJoined: (game: Game, player: Player, code?: string) => void;
   onStartSolo?: (playerName: string) => void;
+  onStartBot?: (playerName: string) => void;
+  onShowLeaderboard?: () => void;
+  onShowStats?: () => void;
   onBackToHome?: () => void;
   initialGame?: Game | null;
   initialPlayer?: Player | null;
@@ -15,6 +18,9 @@ interface MultiplayerHomeScreenProps {
 export default function MultiplayerHomeScreen({
   onGameJoined,
   onStartSolo,
+  onStartBot,
+  onShowLeaderboard,
+  onShowStats,
   onBackToHome,
   initialGame = null,
   initialPlayer = null,
@@ -453,32 +459,75 @@ export default function MultiplayerHomeScreen({
                 : 'Rejoindre la partie'}
             </button>
 
-            {onStartSolo && (
+            {(onStartSolo || onStartBot) && (
               <div className="solo-section mt-4">
                 <div className="divider">
                   <span>OU</span>
                 </div>
-                <button
-                  className="btn btn-secondary w-full mt-3"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    const trimmedName = playerName.trim();
-                    if (trimmedName) {
-                      onStartSolo(trimmedName);
-                    }
-                  }}
-                  disabled={!playerName.trim() || isConnecting}
-                  type="button"
-                >
-                  🎯 Solo Infini
-                </button>
+                {onStartSolo && (
+                  <button
+                    className="btn btn-secondary w-full mt-3"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const trimmedName = playerName.trim();
+                      if (trimmedName) {
+                        onStartSolo(trimmedName);
+                      }
+                    }}
+                    disabled={!playerName.trim() || isConnecting}
+                    type="button"
+                  >
+                    Solo Infini
+                  </button>
+                )}
+                {onStartBot && (
+                  <button
+                    className="btn btn-secondary w-full mt-2"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const trimmedName = playerName.trim();
+                      if (trimmedName) {
+                        onStartBot(trimmedName);
+                      }
+                    }}
+                    disabled={!playerName.trim() || isConnecting}
+                    type="button"
+                  >
+                    Solo vs Bot
+                  </button>
+                )}
                 <p className="form-hint mt-2">
-                  Mode solo avec scoring. Enchaînez les artistes pour obtenir le meilleur score !
+                  Jouez en solo ou affrontez le bot !
                 </p>
                 {!playerName.trim() && (
                   <p className="form-hint mt-1" style={{ color: '#ff6b6b', fontSize: '0.85rem', fontWeight: '600' }}>
-                    ⚠️ Entrez votre nom ci-dessus pour activer le mode solo
+                    Entrez votre nom ci-dessus pour activer les modes solo
                   </p>
+                )}
+              </div>
+            )}
+
+            {(onShowLeaderboard || onShowStats) && (
+              <div className="mt-4" style={{ display: 'flex', gap: '0.5rem' }}>
+                {onShowLeaderboard && (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ flex: 1 }}
+                    onClick={onShowLeaderboard}
+                    type="button"
+                  >
+                    Classement
+                  </button>
+                )}
+                {onShowStats && (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ flex: 1 }}
+                    onClick={onShowStats}
+                    type="button"
+                  >
+                    Statistiques
+                  </button>
                 )}
               </div>
             )}
