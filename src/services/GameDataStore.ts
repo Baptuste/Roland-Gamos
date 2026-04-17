@@ -85,23 +85,25 @@ export class GameDataStore {
     const aliasMap = new Map<number, string[]>();
     if (dbAliases) {
       for (const a of dbAliases) {
-        if (!aliasMap.has(a.artist_id)) aliasMap.set(a.artist_id, []);
-        aliasMap.get(a.artist_id)!.push(a.alias);
+        const artistId = Number(a.artist_id);
+        if (!aliasMap.has(artistId)) aliasMap.set(artistId, []);
+        aliasMap.get(artistId)!.push(a.alias);
       }
     }
 
     for (const a of dbArtists || []) {
+      const id = Number(a.id);
       const artist: GameArtist = {
-        id: a.id,
-        genius_id: a.genius_id,
+        id,
+        genius_id: Number(a.genius_id),
         name: a.name,
-        aliases: aliasMap.get(a.id) || [],
+        aliases: aliasMap.get(id) || [],
         image_url: a.image_url,
         category: a.category || 'underground',
-        category_bonus: a.category_bonus || 40,
-        degree_bonus: a.degree_bonus || 0,
+        category_bonus: Number(a.category_bonus) || 40,
+        degree_bonus: Number(a.degree_bonus) || 0,
       };
-      this.artists.set(a.id, artist);
+      this.artists.set(id, artist);
     }
 
     // Charger les collaborations
@@ -114,13 +116,16 @@ export class GameDataStore {
     }
 
     for (const c of dbCollabs || []) {
-      const key = `${c.artist1_id}|${c.artist2_id}`;
+      const a1 = Number(c.artist1_id);
+      const a2 = Number(c.artist2_id);
+      const [minId, maxId] = a1 < a2 ? [a1, a2] : [a2, a1];
+      const key = `${minId}|${maxId}`;
       this.collaborations.set(key, {
-        artist1_id: c.artist1_id,
-        artist2_id: c.artist2_id,
-        song_count: c.song_count || 1,
-        pair_bonus: c.pair_bonus || 0,
-        confidence: c.confidence || 0.6,
+        artist1_id: minId,
+        artist2_id: maxId,
+        song_count: Number(c.song_count) || 1,
+        pair_bonus: Number(c.pair_bonus) || 0,
+        confidence: Number(c.confidence) || 0.6,
       });
     }
 

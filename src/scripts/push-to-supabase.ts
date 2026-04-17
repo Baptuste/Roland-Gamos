@@ -46,10 +46,15 @@ async function main() {
 
   if (!url || !key) {
     console.error('ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in .env');
+    console.error('  SUPABASE_URL:', url ? '✓' : '✗ MISSING');
+    console.error('  SUPABASE_SERVICE_KEY:', key ? '✓' : '✗ MISSING (not SUPABASE_ANON_KEY!)');
     process.exit(1);
   }
 
-  const supabase = createClient(url, key);
+  console.log('Connecting to Supabase:', url);
+  const supabase = createClient(url, key, {
+    auth: { persistSession: false },
+  });
 
   // Charger les donnees JSON
   if (!fs.existsSync(ARTISTS_PATH) || !fs.existsSync(COLLABS_PATH)) {
@@ -88,9 +93,10 @@ async function main() {
       .upsert(batch, { onConflict: 'genius_id' });
 
     if (error) {
-      console.error(`  Error upserting artists batch ${i}:`, error.message);
+      console.error(`  Error upserting artists batch ${i}:`, error.message, error.code, error.details);
     } else {
       artistCount += batch.length;
+      process.stdout.write(`\r  ${artistCount}/${relevantArtists.length} artists...`);
     }
   }
 
@@ -139,9 +145,9 @@ async function main() {
     return;
   }
 
-  const geniusToDbId = new Map<number, number>();
+  const geniusToDbId = new Map<number, number>(); // genius_id -> SERIAL id
   for (const a of allDbArtists) {
-    geniusToDbId.set(a.genius_id, a.id);
+    geniusToDbId.set(Number(a.genius_id), Number(a.id));
   }
 
   let collabCount = 0;
@@ -173,7 +179,10 @@ async function main() {
       .single();
 
     if (collabError) {
-      // Ignorer les doublons silencieusement
+      // Ignorer les doublons (contrainte UNIQUE), logger les vraies erreurs
+      if (!collabError.message.includes('duplicate') && !collabError.message.includes('unique')) {
+        console.error(`  Collab error (${collab.artist1_name}/${collab.artist2_name}):`, collabError.message);
+      }
       continue;
     }
 

@@ -93,7 +93,8 @@ CREATE POLICY IF NOT EXISTS "Public read collaborations" ON collaborations FOR S
 CREATE POLICY IF NOT EXISTS "Public read collab songs" ON collaboration_songs FOR SELECT USING (true);
 
 -- Ecriture reservee au service_role (backend/ETL)
-CREATE POLICY IF NOT EXISTS "Service write artists" ON artists FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY IF NOT EXISTS "Service write aliases" ON artist_aliases FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY IF NOT EXISTS "Service write collaborations" ON collaborations FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY IF NOT EXISTS "Service write collab songs" ON collaboration_songs FOR ALL USING (auth.role() = 'service_role');
+-- USING = filtre pour SELECT/UPDATE/DELETE, WITH CHECK = filtre pour INSERT/UPDATE
+CREATE POLICY IF NOT EXISTS "Service write artists" ON artists FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "Service write aliases" ON artist_aliases FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "Service write collaborations" ON collaborations FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "Service write collab songs" ON collaboration_songs FOR ALL TO service_role USING (true) WITH CHECK (true);
