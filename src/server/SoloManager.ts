@@ -1,46 +1,12 @@
 import { SoloRun, SoloRunStatus, createSoloRun } from '../types/SoloRun';
 import { SoloMove, createSoloMove } from '../types/SoloMove';
 import { CanonicalArtist } from '../types/Game';
-import { ValidationService } from '../services/ValidationService';
-import { MusicBrainzService } from '../services/MusicBrainzService';
-import { WikidataService } from '../services/WikidataService';
-import { scoringService } from '../services/ScoringService';
+import { gameDataStore } from '../services/GameDataStore';
 
-/**
- * Durée d'un tour en millisecondes (30 secondes)
- */
 const TURN_DURATION_MS = 30000;
+const BASE_POINTS = 100;
+const SCORE_CAP = 280;
 
-/**
- * Liste de rappeurs français populaires pour démarrer une run solo
- * Ces artistes doivent être bien connus et avoir beaucoup de collaborations
- */
-const SEED_ARTISTS = [
-  'Booba',
-  'Kaaris',
-  'Damso',
-  'PNL',
-  'Nekfeu',
-  'Orelsan',
-  'Vald',
-  'Lomepal',
-  'SCH',
-  'Laylow',
-  'Ninho',
-  'Jul',
-  'Gims',
-  'Soprano',
-  'Maître Gims',
-  'Bigflo & Oli',
-  'IAM',
-  'MC Solaar',
-  'Oxmo Puccino',
-  'La Fouine',
-];
-
-/**
- * Résultat d'un coup dans une run solo
- */
 export interface SoloMoveResult {
   isValid: boolean;
   move: SoloMove;
@@ -48,230 +14,79 @@ export interface SoloMoveResult {
   message: string;
 }
 
-/**
- * Gestionnaire de runs solo infinies
- * Stocke les runs en mémoire et gère les timers
- */
 export class SoloManager {
   private runs: Map<string, SoloRun> = new Map();
-  private runTimers: Map<string, NodeJS.Timeout> = new Map(); // runId -> timeout handle
-  private runLocks: Map<string, boolean> = new Map(); // runId -> isProcessing (anti double-submit)
-  private validationService: ValidationService;
-  private musicBrainzService: MusicBrainzService;
+  private runTimers: Map<string, NodeJS.Timeout> = new Map();
+  private runLocks: Map<string, boolean> = new Map();
 
-  constructor() {
-    this.musicBrainzService = new MusicBrainzService();
-    this.validationService = new ValidationService(
-      this.musicBrainzService,
-      new WikidataService()
-    );
-  }
+  // -------------------------------------------------------
+  // Seed artist
+  // -------------------------------------------------------
 
-  /**
-   * Choisit un artiste seed aléatoire depuis la liste
-   */
-  private async chooseSeedArtist(): Promise<CanonicalArtist> {
-    const randomIndex = Math.floor(Math.random() * SEED_ARTISTS.length);
-    const seedName = SEED_ARTISTS[randomIndex];
-
-    // Résoudre l'artiste pour obtenir son identité canonique
-    const resolved = await this.musicBrainzService.resolveArtist(seedName);
-    if (!resolved) {
-      // Fallback : utiliser le nom tel quel si résolution échoue
-      console.warn(`Impossible de résoudre l'artiste seed "${seedName}", utilisation du nom tel quel`);
-      return { name: seedName };
+  private chooseSeedArtist(): CanonicalArtist {
+    const artist = gameDataStore.getRandomSeedArtist();
+    if (!artist) {
+      // Fallback si le store est vide (ne devrait pas arriver)
+      return { name: 'Booba' };
     }
-
-    return {
-      name: resolved.canonicalName,
-      mbid: resolved.mbid,
-    };
+    return { name: artist.name, gameId: artist.id };
   }
 
-  /**
-   * Crée une nouvelle run solo infinie
-   */
-  async startRun(playerName: string): Promise<SoloRun> {
-    const runId = `solo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const seedArtist = await this.chooseSeedArtist();
+  // -------------------------------------------------------
+  // Public API
+  // -------------------------------------------------------
 
+  async startRun(playerName: string): Promise<SoloRun> {
+    // S'assurer que le store est chargé
+    await gameDataStore.initialize();
+
+    const runId = `solo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const seedArtist = this.chooseSeedArtist();
     const run = createSoloRun(runId, playerName, seedArtist);
-    
-    // Définir le timer pour le premier tour
+    // Utiliser le gameId comme clé canonique (cohérent avec les coups suivants)
+    run.usedArtists = [String(seedArtist.gameId ?? seedArtist.name)];
     run.currentTurnEndsAt = Date.now() + TURN_DURATION_MS;
-    
     this.runs.set(runId, run);
     this.scheduleTurnTimer(runId, run);
 
     console.log(`Run solo créée: ${runId}, joueur: ${playerName}, seed: ${seedArtist.name}`);
-
     return run;
   }
 
-  /**
-   * Programme un timer pour le tour actuel
-   */
-  private scheduleTurnTimer(runId: string, run: SoloRun): void {
-    // Annuler le timer existant s'il y en a un
-    this.clearTurnTimer(runId);
-
-    if (run.status !== SoloRunStatus.IN_PROGRESS || !run.currentTurnEndsAt) {
-      return;
-    }
-
-    const now = Date.now();
-    const timeRemaining = run.currentTurnEndsAt - now;
-
-    if (timeRemaining <= 0) {
-      // Le temps est déjà écoulé, traiter immédiatement
-      this.handleTurnTimeout(runId);
-      return;
-    }
-
-    // Programmer le timeout
-    const timeoutHandle = setTimeout(() => {
-      this.handleTurnTimeout(runId);
-    }, timeRemaining);
-
-    this.runTimers.set(runId, timeoutHandle);
-  }
-
-  /**
-   * Gère l'expiration du timer d'un tour
-   */
-  private handleTurnTimeout(runId: string): void {
-    const run = this.runs.get(runId);
-    if (!run || run.status !== SoloRunStatus.IN_PROGRESS) {
-      return;
-    }
-
-    console.log(`Timer expiré pour la run ${runId}, tour ${run.currentTurn}`);
-
-    // Créer un coup invalide pour timeout
-    const timeoutMove = createSoloMove(
-      run.currentTurn,
-      { name: 'TIMEOUT' }, // Artiste fictif pour timeout
-      run.currentArtist || run.seedArtist,
-      false,
-      undefined,
-      'TIMEOUT'
-    );
-
-    // Finir la run
-    const finishedRun: SoloRun = {
-      ...run,
-      status: SoloRunStatus.FINISHED,
-      moves: [...run.moves, timeoutMove],
-      endedAt: Date.now(),
-      endReason: 'TIMEOUT',
-    };
-
-    this.runs.set(runId, finishedRun);
-    this.clearTurnTimer(runId);
-  }
-
-  /**
-   * Annule le timer d'un tour
-   */
-  private clearTurnTimer(runId: string): void {
-    const timeoutHandle = this.runTimers.get(runId);
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
-      this.runTimers.delete(runId);
-    }
-  }
-
-  /**
-   * Vérifie si le tour actuel est expiré
-   */
-  private isTurnExpired(run: SoloRun): boolean {
-    if (!run.currentTurnEndsAt) {
-      return false;
-    }
-    return Date.now() >= run.currentTurnEndsAt;
-  }
-
-  /**
-   * Vérifie si un artiste a déjà été utilisé dans la run
-   */
-  private isArtistUsed(run: SoloRun, canonical: CanonicalArtist): boolean {
-    const canonicalId = canonical.mbid || canonical.name;
-    return run.usedArtists.some(used => 
-      used.toLowerCase() === canonicalId.toLowerCase()
-    );
-  }
-
-  /**
-   * Obtient l'ID canonique d'un artiste
-   */
-  private getCanonicalId(canonical: CanonicalArtist): string {
-    return canonical.mbid || canonical.name;
-  }
-
-  /**
-   * Propose un artiste pour le tour actuel
-   * Valide le coup, calcule le score, et termine la run si erreur
-   */
   async makeMove(runId: string, artistName: string): Promise<SoloMoveResult> {
     const run = this.runs.get(runId);
-    if (!run) {
-      throw new Error(`Run ${runId} introuvable`);
-    }
+    if (!run) throw new Error(`Run ${runId} introuvable`);
 
-    // Vérifier le lock (anti double-submit)
+    // Anti double-submit
     if (this.runLocks.get(runId)) {
       return {
         isValid: false,
-        move: createSoloMove(
-          run.currentTurn,
-          { name: artistName },
-          run.currentArtist || run.seedArtist,
-          false,
-          undefined,
-          'OTHER'
-        ),
+        move: createSoloMove(run.currentTurn, { name: artistName }, run.currentArtist || run.seedArtist, false, undefined, 'OTHER'),
         run,
         message: 'Un coup est déjà en cours de traitement',
       };
     }
 
-    // Vérifier que la run est en cours
     if (run.status !== SoloRunStatus.IN_PROGRESS) {
       return {
         isValid: false,
-        move: createSoloMove(
-          run.currentTurn,
-          { name: artistName },
-          run.currentArtist || run.seedArtist,
-          false,
-          undefined,
-          'OTHER'
-        ),
+        move: createSoloMove(run.currentTurn, { name: artistName }, run.currentArtist || run.seedArtist, false, undefined, 'OTHER'),
         run,
         message: 'La run est terminée',
       };
     }
 
-    // Vérifier le timer
     if (this.isTurnExpired(run)) {
       this.handleTurnTimeout(runId);
       const updatedRun = this.runs.get(runId)!;
       return {
         isValid: false,
-        move: createSoloMove(
-          run.currentTurn,
-          { name: artistName },
-          run.currentArtist || run.seedArtist,
-          false,
-          undefined,
-          'TIMEOUT'
-        ),
+        move: createSoloMove(run.currentTurn, { name: artistName }, run.currentArtist || run.seedArtist, false, undefined, 'TIMEOUT'),
         run: updatedRun,
         message: 'Temps écoulé. Run terminée.',
       };
     }
 
-    // Activer le lock
     this.runLocks.set(runId, true);
 
     try {
@@ -279,186 +94,76 @@ export class SoloManager {
       const turnStartTime = run.currentTurnEndsAt ? run.currentTurnEndsAt - TURN_DURATION_MS : run.startedAt;
       const timeSpentSeconds = Math.floor((Date.now() - turnStartTime) / 1000);
 
-      // Valider le mouvement
-      const validation = await this.validationService.validateMove(
-        previousArtist,
-        artistName
-      );
+      // --- Résolution via GameDataStore (zéro appel réseau) ---
+      const resolvedProposed = gameDataStore.resolveArtist(artistName);
 
-      // Vérifier si l'artiste existe
-      if (!validation.exists) {
-        this.runLocks.delete(runId);
-        const invalidMove = createSoloMove(
-          run.currentTurn,
-          { name: artistName },
-          previousArtist,
-          false,
-          undefined,
-          'NOT_FOUND'
-        );
-        const finishedRun: SoloRun = {
-          ...run,
-          status: SoloRunStatus.FINISHED,
-          moves: [...run.moves, invalidMove],
-          endedAt: Date.now(),
-          endReason: 'INVALID_FEAT',
-        };
-        this.runs.set(runId, finishedRun);
-        this.clearTurnTimer(runId);
-        return {
+      if (!resolvedProposed) {
+        return this.finishRun(run, runId, {
           isValid: false,
-          move: invalidMove,
-          run: finishedRun,
-          message: `Artiste "${artistName}" introuvable. Run terminée.`,
-        };
+          move: createSoloMove(run.currentTurn, { name: artistName }, previousArtist, false, undefined, 'NOT_FOUND'),
+          message: `Artiste "${artistName}" introuvable dans la base. Run terminée.`,
+          endReason: 'INVALID_FEAT',
+        });
       }
 
-      // Vérifier la répétition
-      if (this.isArtistUsed(run, validation.canonical)) {
-        this.runLocks.delete(runId);
-        const invalidMove = createSoloMove(
-          run.currentTurn,
-          validation.canonical,
-          previousArtist,
-          false,
-          validation.source,
-          'REPEAT'
-        );
-        const finishedRun: SoloRun = {
-          ...run,
-          status: SoloRunStatus.FINISHED,
-          moves: [...run.moves, invalidMove],
-          endedAt: Date.now(),
+      const canonical: CanonicalArtist = { name: resolvedProposed.name, gameId: resolvedProposed.id };
+
+      // Vérification répétition
+      const canonicalKey = String(resolvedProposed.id);
+      if (run.usedArtists.includes(canonicalKey)) {
+        return this.finishRun(run, runId, {
+          isValid: false,
+          move: createSoloMove(run.currentTurn, canonical, previousArtist, false, undefined, 'REPEAT'),
+          message: `"${canonical.name}" déjà utilisé. Run terminée.`,
           endReason: 'REPEAT',
-        };
-        this.runs.set(runId, finishedRun);
-        this.clearTurnTimer(runId);
-        return {
-          isValid: false,
-          move: invalidMove,
-          run: finishedRun,
-          message: `Artiste "${validation.canonical.name}" déjà utilisé. Run terminée.`,
-        };
+        });
       }
 
-      // Vérifier la relation (collaboration)
-      if (!validation.validRelation) {
-        this.runLocks.delete(runId);
-        const invalidMove = createSoloMove(
-          run.currentTurn,
-          validation.canonical,
-          previousArtist,
-          false,
-          validation.source,
-          'INVALID_FEAT'
-        );
-        const finishedRun: SoloRun = {
-          ...run,
-          status: SoloRunStatus.FINISHED,
-          moves: [...run.moves, invalidMove],
-          endedAt: Date.now(),
+      // Vérification collaboration
+      const prevGameId = previousArtist.gameId ?? gameDataStore.resolveArtist(previousArtist.name)?.id;
+      if (!prevGameId || !gameDataStore.haveCollaborated(prevGameId, resolvedProposed.id)) {
+        return this.finishRun(run, runId, {
+          isValid: false,
+          move: createSoloMove(run.currentTurn, canonical, previousArtist, false, undefined, 'INVALID_FEAT'),
+          message: `Aucune collaboration trouvée entre "${previousArtist.name}" et "${canonical.name}". Run terminée.`,
           endReason: 'INVALID_FEAT',
-        };
-        this.runs.set(runId, finishedRun);
-        this.clearTurnTimer(runId);
-        return {
-          isValid: false,
-          move: invalidMove,
-          run: finishedRun,
-          message: `Aucune collaboration trouvée entre "${previousArtist.name}" et "${validation.canonical.name}". Run terminée.`,
-        };
+        });
       }
 
-      // Coup valide ! Calculer le score
-      const previousMbid = previousArtist.mbid || '';
-      const currentMbid = validation.canonical.mbid || '';
-      
-      if (!currentMbid) {
-        // Si pas de MBID, on ne peut pas calculer le score précisément
-        // Utiliser un score de base avec seulement timeBonus et chainBonus
-        const timeBonus = timeSpentSeconds <= 5 ? 1.20 :
-                          timeSpentSeconds <= 10 ? 1.12 :
-                          timeSpentSeconds <= 20 ? 1.06 :
-                          timeSpentSeconds <= 35 ? 1.02 : 1.00;
-        
-        const palier = Math.floor((run.currentTurn - 1) / 5);
-        const chainBonus = 1 + Math.min(0.20, 0.05 * palier);
-        
-        const rawScore = 100 * 1.00 * 1.00 * 1.00 * timeBonus * chainBonus;
-        const finalScore = Math.min(Math.round(rawScore), 280);
-        
-        const scoring = {
-          basePoints: 100,
-          pairBonus: 1.00,
-          degreeBonus: 1.00,
-          categoryBonus: 1.00,
-          timeBonus,
-          chainBonus,
-          finalScore,
-          pairFamilyCount: 0,
-          degree: 0,
-          category: 'underground' as const,
-          timeSpent: timeSpentSeconds,
-          chainLength: run.currentTurn,
-        };
-        
-        const validMove = createSoloMove(
-          run.currentTurn,
-          validation.canonical,
-          previousArtist,
-          true,
-          validation.source,
-          undefined,
-          scoring
-        );
+      // --- Coup valide : calcul du score ---
+      const collab = prevGameId ? gameDataStore.getCollaboration(prevGameId, resolvedProposed.id) : null;
+      const pairBonus = collab?.pair_bonus ?? 0;
+      const categoryBonus = resolvedProposed.category_bonus ?? 0;
+      const degreeBonus = resolvedProposed.degree_bonus ?? 0;
+      const timeBonus = this.calculateTimeBonus(timeSpentSeconds);
+      const chainBonus = this.calculateChainBonus(run.currentTurn);
 
-        const updatedRun: SoloRun = {
-          ...run,
-          currentArtist: validation.canonical,
-          usedArtists: [...run.usedArtists, this.getCanonicalId(validation.canonical)],
-          moves: [...run.moves, validMove],
-          totalScore: run.totalScore + scoring.finalScore,
-          currentTurn: run.currentTurn + 1,
-          currentTurnEndsAt: Date.now() + TURN_DURATION_MS,
-        };
+      const rawScore = BASE_POINTS + categoryBonus + degreeBonus + pairBonus + timeBonus + chainBonus;
+      const finalScore = Math.min(Math.round(rawScore), SCORE_CAP);
 
-        this.runs.set(runId, updatedRun);
-        this.scheduleTurnTimer(runId, updatedRun);
-        this.runLocks.delete(runId);
+      const scoring = {
+        basePoints: BASE_POINTS,
+        pairBonus,
+        degreeBonus,
+        categoryBonus,
+        timeBonus,
+        chainBonus,
+        finalScore,
+        pairFamilyCount: collab?.song_count ?? 0,
+        degree: resolvedProposed.degree_bonus ?? 0,
+        category: (resolvedProposed.category as any) ?? 'underground',
+        timeSpent: timeSpentSeconds,
+        chainLength: run.currentTurn,
+      };
 
-        return {
-          isValid: true,
-          move: validMove,
-          run: updatedRun,
-          message: `Coup valide ! +${scoring.finalScore} points`,
-        };
-      }
+      const validMove = createSoloMove(run.currentTurn, canonical, previousArtist, true, 'local_store', undefined, scoring);
 
-      // Calculer le score avec tous les bonus
-      const scoring = scoringService.calculateScore(
-        previousMbid,
-        currentMbid,
-        run.currentTurn,
-        timeSpentSeconds
-      );
-
-      const validMove = createSoloMove(
-        run.currentTurn,
-        validation.canonical,
-        previousArtist,
-        true,
-        validation.source,
-        undefined,
-        scoring
-      );
-
-      // Mettre à jour la run
       const updatedRun: SoloRun = {
         ...run,
-        currentArtist: validation.canonical,
-        usedArtists: [...run.usedArtists, this.getCanonicalId(validation.canonical)],
+        currentArtist: canonical,
+        usedArtists: [...run.usedArtists, canonicalKey],
         moves: [...run.moves, validMove],
-        totalScore: run.totalScore + scoring.finalScore,
+        totalScore: run.totalScore + finalScore,
         currentTurn: run.currentTurn + 1,
         currentTurnEndsAt: Date.now() + TURN_DURATION_MS,
       };
@@ -467,61 +172,99 @@ export class SoloManager {
       this.scheduleTurnTimer(runId, updatedRun);
       this.runLocks.delete(runId);
 
-      return {
-        isValid: true,
-        move: validMove,
-        run: updatedRun,
-        message: `Coup valide ! +${scoring.finalScore} points`,
-      };
+      return { isValid: true, move: validMove, run: updatedRun, message: `Coup valide ! +${finalScore} points` };
+
     } catch (error) {
       this.runLocks.delete(runId);
       console.error(`Erreur lors du traitement du coup pour la run ${runId}:`, error);
-      
-      const errorMove = createSoloMove(
-        run.currentTurn,
-        { name: artistName },
-        run.currentArtist || run.seedArtist,
-        false,
-        undefined,
-        'OTHER'
-      );
-      
-      const finishedRun: SoloRun = {
-        ...run,
-        status: SoloRunStatus.FINISHED,
-        moves: [...run.moves, errorMove],
-        endedAt: Date.now(),
-        endReason: 'OTHER',
-      };
-      
+
+      const errorMove = createSoloMove(run.currentTurn, { name: artistName }, run.currentArtist || run.seedArtist, false, undefined, 'OTHER');
+      const finishedRun: SoloRun = { ...run, status: SoloRunStatus.FINISHED, moves: [...run.moves, errorMove], endedAt: Date.now(), endReason: 'OTHER' };
       this.runs.set(runId, finishedRun);
       this.clearTurnTimer(runId);
-      
-      return {
-        isValid: false,
-        move: errorMove,
-        run: finishedRun,
-        message: 'Erreur lors de la validation. Run terminée.',
-      };
+
+      return { isValid: false, move: errorMove, run: finishedRun, message: 'Erreur lors de la validation. Run terminée.' };
     }
   }
 
-  /**
-   * Obtient une run par son ID
-   */
   getRun(runId: string): SoloRun | null {
     return this.runs.get(runId) || null;
   }
 
-  /**
-   * Supprime une run (utile pour le nettoyage)
-   */
   deleteRun(runId: string): void {
     this.clearTurnTimer(runId);
     this.runLocks.delete(runId);
     this.runs.delete(runId);
   }
+
+  // -------------------------------------------------------
+  // Helpers privés
+  // -------------------------------------------------------
+
+  private finishRun(
+    run: SoloRun,
+    runId: string,
+    result: { isValid: false; move: SoloMove; message: string; endReason: SoloRun['endReason'] }
+  ): SoloMoveResult {
+    const finishedRun: SoloRun = {
+      ...run,
+      status: SoloRunStatus.FINISHED,
+      moves: [...run.moves, result.move],
+      endedAt: Date.now(),
+      endReason: result.endReason,
+    };
+    this.runs.set(runId, finishedRun);
+    this.clearTurnTimer(runId);
+    this.runLocks.delete(runId);
+    return { isValid: false, move: result.move, run: finishedRun, message: result.message };
+  }
+
+  private scheduleTurnTimer(runId: string, run: SoloRun): void {
+    this.clearTurnTimer(runId);
+    if (run.status !== SoloRunStatus.IN_PROGRESS || !run.currentTurnEndsAt) return;
+
+    const timeRemaining = run.currentTurnEndsAt - Date.now();
+    if (timeRemaining <= 0) { this.handleTurnTimeout(runId); return; }
+
+    this.runTimers.set(runId, setTimeout(() => this.handleTurnTimeout(runId), timeRemaining));
+  }
+
+  private handleTurnTimeout(runId: string): void {
+    const run = this.runs.get(runId);
+    if (!run || run.status !== SoloRunStatus.IN_PROGRESS) return;
+
+    const timeoutMove = createSoloMove(run.currentTurn, { name: 'TIMEOUT' }, run.currentArtist || run.seedArtist, false, undefined, 'TIMEOUT');
+    this.runs.set(runId, { ...run, status: SoloRunStatus.FINISHED, moves: [...run.moves, timeoutMove], endedAt: Date.now(), endReason: 'TIMEOUT' });
+    this.clearTurnTimer(runId);
+  }
+
+  private clearTurnTimer(runId: string): void {
+    const handle = this.runTimers.get(runId);
+    if (handle) { clearTimeout(handle); this.runTimers.delete(runId); }
+  }
+
+  private isTurnExpired(run: SoloRun): boolean {
+    return !!run.currentTurnEndsAt && Date.now() >= run.currentTurnEndsAt;
+  }
+
+  // TimeBonus : basé sur % du timer écoulé (timer = 30s)
+  private calculateTimeBonus(seconds: number): number {
+    const pct = seconds / 30;
+    if (pct < 0.20) return 50;
+    if (pct < 0.40) return 35;
+    if (pct < 0.60) return 20;
+    if (pct < 0.80) return 10;
+    return 0;
+  }
+
+  // ChainBonus : bonus additif selon longueur de chaîne
+  private calculateChainBonus(chainLength: number): number {
+    if (chainLength >= 20) return 60;
+    if (chainLength >= 15) return 40;
+    if (chainLength >= 10) return 25;
+    if (chainLength >= 5)  return 10;
+    return 0;
+  }
 }
 
-// Instance singleton
 export const soloManager = new SoloManager();

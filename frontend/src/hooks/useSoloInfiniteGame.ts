@@ -18,7 +18,9 @@ export function useSoloInfiniteGame() {
       const updatedRun = await soloService.getRun(run.id);
       setRun(updatedRun);
     } catch (err: any) {
+      // Run introuvable (ex: backend redémarré) → reset pour relancer une nouvelle run
       console.error('Erreur lors du rafraîchissement de la run:', err);
+      setRun(null);
     }
   }, [run?.id]);
 

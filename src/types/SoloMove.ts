@@ -27,7 +27,7 @@ export interface SoloMove {
   previousArtist: CanonicalArtist; // Artiste précédent
   isValid: boolean;
   timestamp: number; // Timestamp du coup
-  validationSource?: 'musicbrainz' | 'wikidata_fallback';
+  validationSource?: 'musicbrainz' | 'wikidata_fallback' | 'local_store';
   invalidReason?: 'INVALID_FEAT' | 'REPEAT' | 'TIMEOUT' | 'NOT_FOUND' | 'OTHER';
   scoring?: ScoringDetails; // Présent uniquement si isValid === true
 }
@@ -40,7 +40,7 @@ export function createSoloMove(
   artist: CanonicalArtist,
   previousArtist: CanonicalArtist,
   isValid: boolean,
-  validationSource?: 'musicbrainz' | 'wikidata_fallback',
+  validationSource?: 'musicbrainz' | 'wikidata_fallback' | 'local_store',
   invalidReason?: 'INVALID_FEAT' | 'REPEAT' | 'TIMEOUT' | 'NOT_FOUND' | 'OTHER',
   scoring?: ScoringDetails
 ): SoloMove {

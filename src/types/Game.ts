@@ -15,8 +15,9 @@ export enum GameStatus {
  */
 export interface CanonicalArtist {
   name: string;
-  mbid?: string; // MusicBrainz ID (prioritaire)
-  qid?: string;  // Wikidata QID (fallback)
+  mbid?: string;   // MusicBrainz ID (prioritaire)
+  qid?: string;    // Wikidata QID (fallback)
+  gameId?: number; // ID interne GameDataStore (validation locale)
 }
 
 /**

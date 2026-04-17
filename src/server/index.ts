@@ -7,6 +7,7 @@ import { GameManager } from './GameManager';
 import { setupSocketHandlers } from './socketHandlers';
 import { soloManager } from './SoloManager';
 import { botManager } from './BotManager';
+import { gameDataStore } from '../services/GameDataStore';
 
 const app = express();
 const httpServer = createServer(app);
@@ -119,6 +120,34 @@ app.get('/api/solo/infinite/run/:id', (req: express.Request, res: express.Respon
   }
 });
 
+// Hint : retourne quelques artistes valides depuis l'artiste actuel
+app.get('/api/solo/infinite/hint/:runId', (req: express.Request, res: express.Response) => {
+  try {
+    const run = soloManager.getRun(req.params.runId);
+    if (!run) return res.status(404).json({ error: 'Run introuvable' });
+
+    const currentArtist = run.currentArtist || run.seedArtist;
+    const gameId = currentArtist.gameId ?? gameDataStore.resolveArtist(currentArtist.name)?.id;
+
+    if (!gameId) return res.json({ hints: [] });
+
+    const collaboratorIds = gameDataStore.getCollaborators(gameId);
+    const usedSet = new Set(run.usedArtists);
+    const hints = collaboratorIds
+      .filter(id => !usedSet.has(String(id)))
+      .slice(0, 5)
+      .map(id => {
+        const a = gameDataStore.getArtistById(id);
+        return a ? a.name : null;
+      })
+      .filter(Boolean);
+
+    res.json({ hints });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
 // API REST pour le mode Solo vs Bot
 app.post('/api/solo/bot/start', async (req: express.Request, res: express.Response) => {
   try {
@@ -207,6 +236,13 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const PORT = process.env.PORT || 3001;
+
+// Initialiser le GameDataStore avant de démarrer (données locales, pas de réseau)
+gameDataStore.initialize().then(() => {
+  console.log(`📦 GameDataStore: ${gameDataStore.getArtistCount()} artistes, ${gameDataStore.getCollaborationCount()} collabs`);
+}).catch((err) => {
+  console.warn('⚠️  GameDataStore init error (fallback JSON):', err.message);
+});
 
 httpServer.listen(PORT, () => {
   console.log(`🚀 Serveur démarré sur le port ${PORT}`);

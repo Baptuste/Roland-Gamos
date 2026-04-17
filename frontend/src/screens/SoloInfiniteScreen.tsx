@@ -5,6 +5,8 @@ import { saveToLeaderboard } from './LeaderboardScreen';
 import { updateStats } from './StatsScreen';
 import '../styles/GameScreen.css';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+
 interface SoloInfiniteScreenProps {
   playerName: string;
   onBackToHome: () => void;
@@ -18,6 +20,8 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
     message: string;
     isValid: boolean;
   } | null>(null);
+  const [hints, setHints] = useState<string[]>([]);
+  const [showHints, setShowHints] = useState(false);
   const statsSavedRef = useRef(false);
 
   // Sauvegarder les scores quand la partie se termine
@@ -36,6 +40,24 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
       startRun(playerName);
     }
   }, [run, isLoading, playerName, startRun]);
+
+  // Charger les hints quand l'artiste change
+  useEffect(() => {
+    setHints([]);
+    setShowHints(false);
+  }, [run?.currentArtist?.name]);
+
+  const loadHints = async () => {
+    if (!run) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/solo/infinite/hint/${run.id}`);
+      const data = await res.json();
+      setHints(data.hints || []);
+      setShowHints(true);
+    } catch {
+      setHints([]);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -187,6 +209,37 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
                     {isSubmitting ? 'Validation...' : 'Proposer'}
                   </button>
                 </form>
+                <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+                  {!showHints ? (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.75rem', padding: '0.3rem 0.8rem' }}
+                      onClick={loadHints}
+                      type="button"
+                    >
+                      💡 Aide (collabs connues)
+                    </button>
+                  ) : hints.length > 0 ? (
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>Collabs connues :</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'center' }}>
+                        {hints.map((h) => (
+                          <button
+                            key={h}
+                            className="btn btn-secondary"
+                            style={{ fontSize: '0.7rem', padding: '0.2rem 0.6rem' }}
+                            onClick={() => setArtistName(h as string)}
+                            type="button"
+                          >
+                            {h}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Aucune collab connue dans la base</p>
+                  )}
+                </div>
               </div>
             )}
 
