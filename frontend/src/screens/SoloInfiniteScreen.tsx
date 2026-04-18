@@ -22,6 +22,7 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
   } | null>(null);
   const [hints, setHints] = useState<string[]>([]);
   const [showHints, setShowHints] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const statsSavedRef = useRef(false);
 
   // Sauvegarder les scores quand la partie se termine
@@ -290,44 +291,47 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
           </>
         )}
 
-        {/* Historique - même style que multijoueur */}
+        {/* Historique */}
         {run.moves.length > 0 && (
           <div className="card history-card fade-in">
-            <h3 className="history-title">Historique</h3>
-            <div className="history-list">
-              {run.moves.map((move: any, index: number) => (
-                <div
-                  key={index}
-                  className={`history-item ${
-                    move.isValid ? 'history-valid' : 'history-invalid'
-                  }`}
-                >
-                  <div className="history-item-header">
-                    <span className="history-player">Tour {move.turn}</span>
-                    <span className="history-icon">
-                      {move.isValid ? '✓' : '✗'}
-                    </span>
+            <h3
+              className="history-title"
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => setShowHistory(h => !h)}
+            >
+              Historique {showHistory ? '▲' : '▼'}
+            </h3>
+            {showHistory && (
+              <div className="history-list">
+                {run.moves.map((move: any, index: number) => (
+                  <div
+                    key={index}
+                    className={`history-item ${move.isValid ? 'history-valid' : 'history-invalid'}`}
+                  >
+                    <div className="history-item-header">
+                      <span className="history-player">Tour {move.turn}</span>
+                      <span className="history-icon">{move.isValid ? '✓' : '✗'}</span>
+                    </div>
+                    <div className="history-artist">
+                      {move.artist?.name || move.proposedArtistName || 'N/A'}
+                      {move.isValid && move.scoring && (
+                        <span style={{ marginLeft: '0.5rem', color: 'var(--success)', fontWeight: '600' }}>
+                          (+{move.scoring.finalScore} pts)
+                        </span>
+                      )}
+                      {!move.isValid && (
+                        <span style={{ marginLeft: '0.5rem', color: 'var(--error)', fontSize: '0.85rem' }}>
+                          ({move.invalidReason === 'TIMEOUT' ? 'Timeout' :
+                            move.invalidReason === 'REPEAT' ? 'Répétition' :
+                            move.invalidReason === 'INVALID_FEAT' ? 'Pas de collaboration' :
+                            move.invalidReason === 'NOT_FOUND' ? 'Artiste introuvable' : 'Erreur'})
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="history-artist">
-                    {move.artist?.name || move.proposedArtistName || 'N/A'}
-                    {move.isValid && move.scoring && (
-                      <span style={{ marginLeft: '0.5rem', color: 'var(--success)', fontWeight: '600' }}>
-                        (+{move.scoring.finalScore} pts)
-                      </span>
-                    )}
-                    {!move.isValid && (
-                      <span style={{ marginLeft: '0.5rem', color: 'var(--error)', fontSize: '0.85rem' }}>
-                        ({move.invalidReason === 'TIMEOUT' ? 'Timeout' :
-                          move.invalidReason === 'REPEAT' ? 'Répétition' :
-                          move.invalidReason === 'INVALID_FEAT' ? 'Pas de collaboration' :
-                          move.invalidReason === 'NOT_FOUND' ? 'Artiste introuvable' :
-                          'Erreur'})
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

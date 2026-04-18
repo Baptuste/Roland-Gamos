@@ -17,6 +17,7 @@ export default function SoloBotScreen({ playerName, onBackToHome }: SoloBotScree
   const [lastMessage, setLastMessage] = useState<{ message: string; isValid: boolean } | null>(null);
   const [botMessage, setBotMessage] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const timeoutCheckDoneRef = useRef<boolean>(false);
   const statsSavedRef = useRef<boolean>(false);
 
@@ -299,35 +300,43 @@ export default function SoloBotScreen({ playerName, onBackToHome }: SoloBotScree
         {/* Historique */}
         {(run.playerMoves.length > 0 || run.botMoves.length > 0) && (
           <div className="card history-card fade-in">
-            <h3 className="history-title">Historique</h3>
-            <div className="history-list">
-              {[...run.playerMoves, ...run.botMoves]
-                .sort((a, b) => a.turn - b.turn || (a.timestamp - b.timestamp))
-                .map((move, index) => {
-                  const isPlayerMove = run.playerMoves.includes(move);
-                  return (
-                    <div
-                      key={index}
-                      className={`history-item ${move.isValid ? 'history-valid' : 'history-invalid'}`}
-                    >
-                      <div className="history-item-header">
-                        <span className="history-player">
-                          {isPlayerMove ? playerName : 'Bot'} - Tour {move.turn}
-                        </span>
-                        <span className="history-icon">{move.isValid ? '✓' : '✗'}</span>
-                      </div>
-                      <div className="history-artist">
-                        {move.artist?.name || 'N/A'}
-                        {move.isValid && move.scoring && (
-                          <span style={{ marginLeft: '0.5rem', color: 'var(--success)', fontWeight: '600' }}>
-                            (+{move.scoring.finalScore} pts)
+            <h3
+              className="history-title"
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => setShowHistory(h => !h)}
+            >
+              Historique {showHistory ? '▲' : '▼'}
+            </h3>
+            {showHistory && (
+              <div className="history-list">
+                {[...run.playerMoves, ...run.botMoves]
+                  .sort((a, b) => a.turn - b.turn || (a.timestamp - b.timestamp))
+                  .map((move, index) => {
+                    const isPlayerMove = run.playerMoves.includes(move);
+                    return (
+                      <div
+                        key={index}
+                        className={`history-item ${move.isValid ? 'history-valid' : 'history-invalid'}`}
+                      >
+                        <div className="history-item-header">
+                          <span className="history-player">
+                            {isPlayerMove ? playerName : 'Bot'} - Tour {move.turn}
                           </span>
-                        )}
+                          <span className="history-icon">{move.isValid ? '✓' : '✗'}</span>
+                        </div>
+                        <div className="history-artist">
+                          {move.artist?.name || 'N/A'}
+                          {move.isValid && move.scoring && (
+                            <span style={{ marginLeft: '0.5rem', color: 'var(--success)', fontWeight: '600' }}>
+                              (+{move.scoring.finalScore} pts)
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-            </div>
+                    );
+                  })}
+              </div>
+            )}
           </div>
         )}
       </div>
