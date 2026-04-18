@@ -31,7 +31,7 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
       statsSavedRef.current = true;
       const turns = run.currentTurn - 1;
       saveToLeaderboard(playerName, run.totalScore, turns, 'Solo Infini');
-      updateStats({ mode: 'solo', score: run.totalScore, turns });
+      updateStats({ mode: 'solo', score: run.totalScore, turns, playerName });
     }
   }, [run?.status]);
 

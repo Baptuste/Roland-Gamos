@@ -205,6 +205,116 @@ app.get('/api/solo/bot/run/:id', (req: express.Request, res: express.Response) =
   }
 });
 
+// ============================================================
+// API Leaderboard
+// ============================================================
+import { supabase } from '../services/supabaseClient';
+
+app.get('/api/leaderboard', async (req: express.Request, res: express.Response) => {
+  try {
+    const mode = req.query.mode as string | undefined;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+
+    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
+
+    let query = supabase.from('leaderboard').select('*').order('score', { ascending: false }).limit(limit);
+    if (mode && mode !== 'all') query = query.eq('mode', mode);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json({ entries: data || [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/leaderboard', async (req: express.Request, res: express.Response) => {
+  const { playerName, score, turns, mode } = req.body;
+  if (!playerName || score === undefined || !mode) {
+    return res.status(400).json({ error: 'playerName, score, mode requis' });
+  }
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
+
+    const { data, error } = await supabase.from('leaderboard').insert({
+      player_name: String(playerName),
+      score: Number(score),
+      turns: Number(turns) || 0,
+      mode: String(mode),
+    }).select().single();
+    if (error) throw error;
+    res.json({ entry: data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
+// API Stats
+// ============================================================
+
+app.get('/api/stats/:playerName', async (req: express.Request, res: express.Response) => {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
+
+    const { data, error } = await supabase
+      .from('player_stats')
+      .select('*')
+      .eq('player_name', req.params.playerName)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    res.json({ stats: data || null });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/stats/:playerName', async (req: express.Request, res: express.Response) => {
+  const playerName = req.params.playerName;
+  const update = req.body as { mode: string; score: number; turns: number; botWin?: boolean };
+
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
+
+    const { data: existing } = await supabase
+      .from('player_stats').select('*').eq('player_name', playerName).single();
+
+    const stats: Record<string, any> = existing || {
+      player_name: playerName,
+      total_games: 0, total_solo_games: 0, total_bot_games: 0, total_multiplayer_games: 0,
+      best_solo_score: 0, best_solo_turns: 0, best_bot_score: 0,
+      total_score: 0, bot_wins: 0, bot_losses: 0,
+    };
+
+    stats.total_games = (stats.total_games || 0) + 1;
+    stats.total_score = (stats.total_score || 0) + (Number(update.score) || 0);
+
+    if (update.mode === 'solo') {
+      stats.total_solo_games = (stats.total_solo_games || 0) + 1;
+      if (Number(update.score) > (stats.best_solo_score || 0)) stats.best_solo_score = Number(update.score);
+      if (Number(update.turns) > (stats.best_solo_turns || 0)) stats.best_solo_turns = Number(update.turns);
+    } else if (update.mode === 'bot') {
+      stats.total_bot_games = (stats.total_bot_games || 0) + 1;
+      if (Number(update.score) > (stats.best_bot_score || 0)) stats.best_bot_score = Number(update.score);
+      if (update.botWin) stats.bot_wins = (stats.bot_wins || 0) + 1;
+      else stats.bot_losses = (stats.bot_losses || 0) + 1;
+    } else {
+      stats.total_multiplayer_games = (stats.total_multiplayer_games || 0) + 1;
+    }
+
+    stats.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('player_stats')
+      .upsert({ ...stats, player_name: playerName }, { onConflict: 'player_name' })
+      .select().single();
+    if (error) throw error;
+    res.json({ stats: data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Configuration des handlers WebSocket
 setupSocketHandlers(io, gameManager);
 

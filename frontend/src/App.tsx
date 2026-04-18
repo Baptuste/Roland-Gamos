@@ -251,7 +251,7 @@ function App() {
   }
 
   if (currentScreen === 'stats') {
-    return <StatsScreen onBackToHome={handleBackToHome} />;
+    return <StatsScreen playerName={soloPlayerName || undefined} onBackToHome={handleBackToHome} />;
   }
 
   // Solo infini

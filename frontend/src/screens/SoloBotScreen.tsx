@@ -29,7 +29,7 @@ export default function SoloBotScreen({ playerName, onBackToHome }: SoloBotScree
       const score = run.playerScore;
       const isWin = run.winner === 'player';
       saveToLeaderboard(playerName, score, turns, 'Solo vs Bot');
-      updateStats({ mode: 'bot', score, turns, botWin: isWin });
+      updateStats({ mode: 'bot', score, turns, botWin: isWin, playerName });
     }
   }, [run?.status]);
 
