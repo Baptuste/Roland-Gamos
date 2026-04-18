@@ -115,16 +115,26 @@ export class GameDataStore {
       this.artists.set(geniusId, artist);
     }
 
-    // Charger les collaborations
-    const { data: dbCollabs, error: collabError } = await supabase!
-      .from('collaborations')
-      .select('artist1_id, artist2_id, song_count, pair_bonus, confidence');
-
-    if (collabError) {
-      console.error('  Supabase collab load error:', collabError.message);
+    // Charger les collaborations (pagination pour dépasser la limite 1000)
+    const allCollabs: any[] = [];
+    const PAGE_SIZE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error: collabError } = await supabase!
+        .from('collaborations')
+        .select('artist1_id, artist2_id, song_count, pair_bonus, confidence')
+        .range(from, from + PAGE_SIZE - 1);
+      if (collabError) {
+        console.error('  Supabase collab load error:', collabError.message);
+        break;
+      }
+      if (!data || data.length === 0) break;
+      allCollabs.push(...data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
-    for (const c of dbCollabs || []) {
+    for (const c of allCollabs) {
       // artist1_id / artist2_id sont des UUIDs → convertir en genius_id
       const a1 = uuidToGeniusId.get(String(c.artist1_id));
       const a2 = uuidToGeniusId.get(String(c.artist2_id));
