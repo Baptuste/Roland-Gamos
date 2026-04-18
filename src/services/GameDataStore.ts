@@ -65,6 +65,7 @@ export class GameDataStore {
     console.log('  Loading from Supabase...');
 
     // Charger les artistes inclus
+    // Note: artists.id est UUID dans Supabase — on utilise genius_id comme clé interne integer
     const { data: dbArtists, error: artistError } = await supabase!
       .from('artists')
       .select('id, genius_id, name, image_url, category, category_bonus, degree_bonus, status')
@@ -77,33 +78,41 @@ export class GameDataStore {
       return;
     }
 
-    // Charger les aliases
+    // Map UUID -> genius_id pour résoudre les FKs des collaborations
+    const uuidToGeniusId = new Map<string, number>();
+
+    // Charger les aliases (artist_aliases.artist_id est UUID)
     const { data: dbAliases } = await supabase!
       .from('artist_aliases')
       .select('artist_id, alias');
 
-    const aliasMap = new Map<number, string[]>();
+    // Index aliases par UUID d'abord, puis on convertira en genius_id
+    const aliasMapByUuid = new Map<string, string[]>();
     if (dbAliases) {
       for (const a of dbAliases) {
-        const artistId = Number(a.artist_id);
-        if (!aliasMap.has(artistId)) aliasMap.set(artistId, []);
-        aliasMap.get(artistId)!.push(a.alias);
+        const uuid = String(a.artist_id);
+        if (!aliasMapByUuid.has(uuid)) aliasMapByUuid.set(uuid, []);
+        aliasMapByUuid.get(uuid)!.push(a.alias);
       }
     }
 
     for (const a of dbArtists || []) {
-      const id = Number(a.id);
+      const geniusId = Number(a.genius_id);
+      if (!geniusId) continue; // ignorer si genius_id manquant
+
+      uuidToGeniusId.set(String(a.id), geniusId);
+
       const artist: GameArtist = {
-        id,
-        genius_id: Number(a.genius_id),
+        id: geniusId, // on utilise genius_id comme clé interne
+        genius_id: geniusId,
         name: a.name,
-        aliases: aliasMap.get(id) || [],
+        aliases: aliasMapByUuid.get(String(a.id)) || [],
         image_url: a.image_url,
         category: a.category || 'underground',
         category_bonus: Number(a.category_bonus) || 40,
         degree_bonus: Number(a.degree_bonus) || 0,
       };
-      this.artists.set(id, artist);
+      this.artists.set(geniusId, artist);
     }
 
     // Charger les collaborations
@@ -116,8 +125,11 @@ export class GameDataStore {
     }
 
     for (const c of dbCollabs || []) {
-      const a1 = Number(c.artist1_id);
-      const a2 = Number(c.artist2_id);
+      // artist1_id / artist2_id sont des UUIDs → convertir en genius_id
+      const a1 = uuidToGeniusId.get(String(c.artist1_id));
+      const a2 = uuidToGeniusId.get(String(c.artist2_id));
+      if (!a1 || !a2) continue;
+
       const [minId, maxId] = a1 < a2 ? [a1, a2] : [a2, a1];
       const key = `${minId}|${maxId}`;
       this.collaborations.set(key, {

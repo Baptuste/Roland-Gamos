@@ -82,9 +82,6 @@ async function main() {
       genius_id: a.genius_id,
       name: a.name,
       image_url: a.image_url || null,
-      mbid: a.mbid || null,
-      fr_collab_count: a.fr_collab_count,
-      is_seed: a.is_seed,
       status: a.status,
     }));
 
@@ -145,9 +142,9 @@ async function main() {
     return;
   }
 
-  const geniusToDbId = new Map<number, number>(); // genius_id -> SERIAL id
+  const geniusToDbId = new Map<number, string>(); // genius_id -> UUID
   for (const a of allDbArtists) {
-    geniusToDbId.set(Number(a.genius_id), Number(a.id));
+    if (a.genius_id) geniusToDbId.set(Number(a.genius_id), String(a.id));
   }
 
   let collabCount = 0;
@@ -160,7 +157,7 @@ async function main() {
     // Seulement les collabs entre artistes inclus/needs_review
     if (!a1Id || !a2Id) continue;
 
-    // S'assurer que artist1_id < artist2_id (contrainte CHECK)
+    // S'assurer que artist1_id < artist2_id (contrainte CHECK — tri alphabétique UUID)
     const [minId, maxId] = a1Id < a2Id ? [a1Id, a2Id] : [a2Id, a1Id];
 
     const { data: collabRow, error: collabError } = await supabase
