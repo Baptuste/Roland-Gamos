@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { SoloRunStatus } from '../shared/types';
 import { useSoloInfiniteGame } from '../hooks/useSoloInfiniteGame';
+import { useArtistAutocomplete } from '../hooks/useArtistAutocomplete';
 import { saveToLeaderboard } from './LeaderboardScreen';
 import { updateStats } from './StatsScreen';
 import '../styles/GameScreen.css';
@@ -23,7 +24,9 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
   const [hints, setHints] = useState<string[]>([]);
   const [showHints, setShowHints] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const statsSavedRef = useRef(false);
+  const { suggestions, clear: clearSuggestions } = useArtistAutocomplete(artistName);
 
   // Sauvegarder les scores quand la partie se termine
   useEffect(() => {
@@ -70,9 +73,12 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
     setIsSubmitting(true);
     setLastMessage(null);
 
+    clearSuggestions();
+    setShowSuggestions(false);
+
     try {
       const result = await makeMove(artistName.trim());
-      
+
       setLastMessage({
         message: result.message,
         isValid: result.isValid,
@@ -191,17 +197,38 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
                   <label htmlFor="artist-input" className="proposal-label">
                     Proposer un artiste
                   </label>
-                  <input
-                    id="artist-input"
-                    type="text"
-                    className="input artist-input"
-                    placeholder="Ex: Booba, Kaaris, Damso..."
-                    value={artistName}
-                    onChange={(e) => setArtistName(e.target.value)}
-                    disabled={isSubmitting}
-                    autoFocus
-                    autoComplete="off"
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      id="artist-input"
+                      type="text"
+                      className="input artist-input"
+                      placeholder="Ex: Booba, Kaaris, Damso..."
+                      value={artistName}
+                      onChange={(e) => { setArtistName(e.target.value); setShowSuggestions(true); }}
+                      onFocus={() => setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                      disabled={isSubmitting}
+                      autoFocus
+                      autoComplete="off"
+                    />
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                        background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                        borderRadius: '0 0 8px 8px', maxHeight: '200px', overflowY: 'auto',
+                      }}>
+                        {suggestions.map((s) => (
+                          <div
+                            key={s}
+                            style={{ padding: '0.5rem 0.75rem', cursor: 'pointer', fontSize: '0.9rem' }}
+                            onMouseDown={() => { setArtistName(s); setShowSuggestions(false); }}
+                          >
+                            {s}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="submit"
                     className="btn btn-primary w-full mt-2"

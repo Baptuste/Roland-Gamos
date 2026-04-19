@@ -30,6 +30,15 @@ interface ETLArtist {
   status: 'included' | 'excluded' | 'needs_review';
 }
 
+function assignCategory(artist: ETLArtist): { category: string; category_bonus: number } {
+  const count = artist.fr_collab_count;
+  if (artist.is_seed || count >= 20) return { category: 'ultra_mainstream', category_bonus: 80 };
+  if (count >= 10) return { category: 'mainstream', category_bonus: 60 };
+  if (count >= 5) return { category: 'intermediate', category_bonus: 40 };
+  if (count >= 3) return { category: 'underground', category_bonus: 25 };
+  return { category: 'niche', category_bonus: 10 };
+}
+
 interface ETLCollaboration {
   artist1_genius_id: number;
   artist1_name: string;
@@ -78,12 +87,17 @@ async function main() {
   let artistCount = 0;
 
   for (let i = 0; i < relevantArtists.length; i += BATCH_SIZE) {
-    const batch = relevantArtists.slice(i, i + BATCH_SIZE).map(a => ({
-      genius_id: a.genius_id,
-      name: a.name,
-      image_url: a.image_url || null,
-      status: a.status,
-    }));
+    const batch = relevantArtists.slice(i, i + BATCH_SIZE).map(a => {
+      const { category, category_bonus } = assignCategory(a);
+      return {
+        genius_id: a.genius_id,
+        name: a.name,
+        image_url: a.image_url || null,
+        status: a.status,
+        category,
+        category_bonus,
+      };
+    });
 
     const { error } = await supabase
       .from('artists')
@@ -132,15 +146,18 @@ async function main() {
   // ---- UPSERT Collaborations ----
   console.log('\n=== Uploading collaborations ===');
 
-  // Construire un index genius_id -> db_id
-  const { data: allDbArtists } = await supabase
-    .from('artists')
-    .select('id, genius_id');
-
-  if (!allDbArtists) {
-    console.error('  Error fetching artists for collaboration mapping');
-    return;
+  // Construire un index genius_id -> db_id (avec pagination)
+  const allDbArtists: { id: string; genius_id: number }[] = [];
+  const PAGE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase.from('artists').select('id, genius_id').range(from, from + PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    allDbArtists.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
   }
+  console.log(`  Fetched ${allDbArtists.length} artists from Supabase for mapping`);
 
   const geniusToDbId = new Map<number, string>(); // genius_id -> UUID
   for (const a of allDbArtists) {
@@ -148,61 +165,61 @@ async function main() {
   }
 
   let collabCount = 0;
-  let songCount = 0;
+
+  // Préparer toutes les collabs valides
+  const collabBatchData: Array<{
+    artist1_id: string; artist2_id: string; song_count: number;
+    pair_bonus: number; confidence: number; sources: string[];
+    origSongs: { genius_id: number; title: string }[];
+    artist1_name: string; artist2_name: string;
+  }> = [];
 
   for (const collab of collabsData) {
     const a1Id = geniusToDbId.get(collab.artist1_genius_id);
     const a2Id = geniusToDbId.get(collab.artist2_genius_id);
-
-    // Seulement les collabs entre artistes inclus/needs_review
     if (!a1Id || !a2Id) continue;
 
-    // S'assurer que artist1_id < artist2_id (contrainte CHECK — tri alphabétique UUID)
     const [minId, maxId] = a1Id < a2Id ? [a1Id, a2Id] : [a2Id, a1Id];
-
-    const { data: collabRow, error: collabError } = await supabase
-      .from('collaborations')
-      .upsert(
-        {
-          artist1_id: minId,
-          artist2_id: maxId,
-          song_count: collab.songs.length,
-          confidence: collab.confidence,
-          sources: collab.sources,
-        },
-        { onConflict: 'artist1_id,artist2_id' }
-      )
-      .select('id')
-      .single();
-
-    if (collabError) {
-      // Ignorer les doublons (contrainte UNIQUE), logger les vraies erreurs
-      if (!collabError.message.includes('duplicate') && !collabError.message.includes('unique')) {
-        console.error(`  Collab error (${collab.artist1_name}/${collab.artist2_name}):`, collabError.message);
-      }
-      continue;
-    }
-
-    collabCount++;
-
-    // Upload les titres
-    if (collabRow && collab.songs.length > 0) {
-      const songBatch = collab.songs.map(s => ({
-        collaboration_id: collabRow.id,
-        genius_song_id: s.genius_id,
-        title: s.title,
-      }));
-
-      const { error: songError } = await supabase
-        .from('collaboration_songs')
-        .upsert(songBatch, { onConflict: 'collaboration_id,genius_song_id' });
-
-      if (!songError) songCount += songBatch.length;
-    }
+    collabBatchData.push({
+      artist1_id: minId,
+      artist2_id: maxId,
+      song_count: collab.songs.length,
+      pair_bonus: collab.songs.length >= 5 ? 30 : collab.songs.length >= 3 ? 20 : collab.songs.length >= 2 ? 10 : 0,
+      confidence: collab.confidence,
+      sources: collab.sources,
+      origSongs: collab.songs,
+      artist1_name: collab.artist1_name,
+      artist2_name: collab.artist2_name,
+    });
   }
 
-  console.log(`  ${collabCount} collaborations uploaded`);
-  console.log(`  ${songCount} collaboration songs uploaded`);
+  console.log(`  ${collabBatchData.length} collaborations to upload`);
+
+  // Upsert en batch (sans songs pour la vitesse)
+  const COLLAB_BATCH = 200;
+  for (let i = 0; i < collabBatchData.length; i += COLLAB_BATCH) {
+    const batch = collabBatchData.slice(i, i + COLLAB_BATCH).map(c => ({
+      artist1_id: c.artist1_id,
+      artist2_id: c.artist2_id,
+      song_count: c.song_count,
+      pair_bonus: c.pair_bonus,
+      confidence: c.confidence,
+      sources: c.sources,
+    }));
+
+    const { error } = await supabase
+      .from('collaborations')
+      .upsert(batch, { onConflict: 'artist1_id,artist2_id' });
+
+    if (error) {
+      console.error(`  Collab batch error at ${i}:`, error.message);
+    } else {
+      collabCount += batch.length;
+    }
+    process.stdout.write(`\r  ${Math.min(i + COLLAB_BATCH, collabBatchData.length)}/${collabBatchData.length} collabs...`);
+  }
+
+  console.log(`\n  ${collabCount} collaborations uploaded`);
 
   console.log('\n=== Done ===');
 }

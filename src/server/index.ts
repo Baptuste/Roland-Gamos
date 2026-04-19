@@ -150,6 +150,14 @@ app.get('/api/solo/infinite/hint/:runId', (req: express.Request, res: express.Re
   }
 });
 
+// Autocomplete d'artistes
+app.get('/api/artists/search', (req: express.Request, res: express.Response) => {
+  const query = (req.query.q as string || '').trim();
+  if (!query || query.length < 2) return res.json({ artists: [] });
+  const artists = gameDataStore.searchArtistsByPrefix(query, 10);
+  res.json({ artists });
+});
+
 // API REST pour le mode Solo vs Bot
 app.post('/api/solo/bot/start', async (req: express.Request, res: express.Response) => {
   try {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Game, GameStatus } from '../shared/types';
 import { socketService } from '../services/socketService';
 import { GameService } from '../shared/services/GameService';
+import { useArtistAutocomplete } from '../hooks/useArtistAutocomplete';
 import '../styles/GameScreen.css';
 
 interface MultiplayerGameScreenProps {
@@ -24,6 +25,8 @@ export default function MultiplayerGameScreen({
   } | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected'>('connected');
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const { suggestions, clear: clearSuggestions } = useArtistAutocomplete(artistName);
 
   const gameService = new GameService();
   const currentPlayer = gameService.getCurrentPlayer(game);
@@ -135,6 +138,8 @@ export default function MultiplayerGameScreen({
       return;
     }
 
+    clearSuggestions();
+    setShowSuggestions(false);
     setIsSubmitting(true);
     setLastMessage(null);
 
@@ -245,17 +250,38 @@ export default function MultiplayerGameScreen({
                   <label htmlFor="artist-input" className="proposal-label">
                     Proposer un artiste
                   </label>
-                  <input
-                    id="artist-input"
-                    type="text"
-                    className="input artist-input"
-                    placeholder="Ex: Booba, Kaaris, Damso..."
-                    value={artistName}
-                    onChange={(e) => setArtistName(e.target.value)}
-                    disabled={isSubmitting}
-                    autoFocus
-                    autoComplete="off"
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      id="artist-input"
+                      type="text"
+                      className="input artist-input"
+                      placeholder="Ex: Booba, Kaaris, Damso..."
+                      value={artistName}
+                      onChange={(e) => { setArtistName(e.target.value); setShowSuggestions(true); }}
+                      onFocus={() => setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                      disabled={isSubmitting}
+                      autoFocus
+                      autoComplete="off"
+                    />
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                        background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                        borderRadius: '0 0 8px 8px', maxHeight: '200px', overflowY: 'auto',
+                      }}>
+                        {suggestions.map((s) => (
+                          <div
+                            key={s}
+                            style={{ padding: '0.5rem 0.75rem', cursor: 'pointer', fontSize: '0.9rem' }}
+                            onMouseDown={() => { setArtistName(s); setShowSuggestions(false); }}
+                          >
+                            {s}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="submit"
                     className="btn btn-primary w-full mt-2"

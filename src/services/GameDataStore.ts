@@ -323,6 +323,39 @@ export class GameDataStore {
   getCollaborationCount(): number {
     return this.collaborations.size;
   }
+
+  /**
+   * Recherche d'artistes par préfixe de nom (pour autocomplete)
+   */
+  searchArtistsByPrefix(query: string, limit = 10): string[] {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+
+    const results: string[] = [];
+    const seen = new Set<string>();
+
+    // Préfixe exact en priorité
+    for (const [nameLower, artist] of this.artistsByName) {
+      if (nameLower.startsWith(q) && !seen.has(artist.name)) {
+        results.push(artist.name);
+        seen.add(artist.name);
+        if (results.length >= limit) return results;
+      }
+    }
+
+    // Contient la chaîne (si moins de `limit` résultats)
+    if (results.length < limit) {
+      for (const [nameLower, artist] of this.artistsByName) {
+        if (!nameLower.startsWith(q) && nameLower.includes(q) && !seen.has(artist.name)) {
+          results.push(artist.name);
+          seen.add(artist.name);
+          if (results.length >= limit) break;
+        }
+      }
+    }
+
+    return results;
+  }
 }
 
 // Singleton
