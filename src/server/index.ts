@@ -13,7 +13,7 @@ import { gameDataStore } from '../services/GameDataStore';
 
 const app = express();
 const httpServer = createServer(app);
-// Configuration CORS pour permettre les connexions depuis Render, Railway, Vercel et localhost
+// Configuration CORS pour permettre les connexions depuis Render, Vercel et localhost
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
@@ -21,21 +21,14 @@ const io = new Server(httpServer, {
       if (process.env.NODE_ENV === 'development' || !origin) {
         return callback(null, true);
       }
-      
+
       // En production, vérifier l'origine
-      // Accepter :
-      // - localhost (développement)
-      // - Domaines Render (.onrender.com)
-      // - Domaines Railway (.up.railway.app)
-      // - Domaines Vercel (.vercel.app)
-      // - URL définie dans FRONTEND_URL
       const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
-      const isRailway = origin?.endsWith('.up.railway.app') || origin?.endsWith('.railway.app');
       const isRender = origin?.endsWith('.onrender.com');
       const isVercel = origin?.endsWith('.vercel.app');
       const isAllowedOrigin = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
 
-      if (isLocalhost || isRailway || isRender || isVercel || isAllowedOrigin) {
+      if (isLocalhost || isRender || isVercel || isAllowedOrigin) {
         callback(null, true);
       } else {
         console.warn(`CORS: Origine rejetée: ${origin}`);
@@ -62,7 +55,7 @@ app.get('/api/game/:gameId', (req: express.Request, res: express.Response) => {
   }
 });
 
-// Health check endpoint (Render / Railway)
+// Health check endpoint (Render)
 app.get('/health', (req: express.Request, res: express.Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -326,7 +319,7 @@ app.post('/api/stats/:playerName', async (req: express.Request, res: express.Res
 // Configuration des handlers WebSocket
 setupSocketHandlers(io, gameManager);
 
-// Servir le frontend en production (Render / Railway)
+// Servir le frontend en production (Render)
 if (process.env.NODE_ENV === 'production') {
   // Chemin relatif depuis le fichier compilé (dist/server/index.js)
   const frontendDistPath = path.join(process.cwd(), 'frontend/dist');

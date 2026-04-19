@@ -87,7 +87,7 @@ export class PopularityIngestJob {
       // Sauvegarder dans la base de données
       await this.repository.saveRawData(rawData);
 
-      // Log structuré (JSON pour Railway)
+      // Log structuré (JSON)
       console.log(JSON.stringify({
         level: 'info',
         job: 'popularity_ingest',

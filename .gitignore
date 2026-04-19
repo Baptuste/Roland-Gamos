@@ -23,3 +23,12 @@ Thumbs.db
 # Deployment
 .vercel
 .railway
+
+# Claude Code
+.claude/
+
+# Supabase temp
+supabase/.temp/
+
+# ETL / scripts temporaires
+wave1_interceptor.js

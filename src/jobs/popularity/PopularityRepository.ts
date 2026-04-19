@@ -152,12 +152,6 @@ export class InMemoryPopularityRepository implements IPopularityRepository {
  * À remplacer par une implémentation réelle en production
  */
 export function createPopularityRepository(): IPopularityRepository {
-  // TODO: Implémenter avec PostgreSQL pour Railway
-  // const dbUrl = process.env.DATABASE_URL;
-  // if (dbUrl) {
-  //   return new PostgresPopularityRepository(dbUrl);
-  // }
-  
   // Pour l'instant, utiliser la mémoire
   console.warn('⚠️  Utilisation du repository en mémoire. Implémentez une base de données réelle pour la production.');
   return new InMemoryPopularityRepository();
