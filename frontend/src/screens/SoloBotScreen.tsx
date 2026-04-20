@@ -1,16 +1,17 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { botService, BotGameRun, BotGameMoveResult } from '../shared/services/BotService';
 import { useArtistAutocomplete } from '../hooks/useArtistAutocomplete';
-import { saveToLeaderboard } from './LeaderboardScreen';
-import { updateStats } from './StatsScreen';
+import GameOverScreen from './GameOverScreen';
 import '../styles/GameScreen.css';
 
 interface SoloBotScreenProps {
   playerName: string;
+  playerId: string;
   onBackToHome: () => void;
+  onReplay: () => void;
 }
 
-export default function SoloBotScreen({ playerName, onBackToHome }: SoloBotScreenProps) {
+export default function SoloBotScreen({ playerName, playerId, onBackToHome, onReplay }: SoloBotScreenProps) {
   const [run, setRun] = useState<BotGameRun | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [artistName, setArtistName] = useState('');
@@ -21,20 +22,9 @@ export default function SoloBotScreen({ playerName, onBackToHome }: SoloBotScree
   const [showHistory, setShowHistory] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const timeoutCheckDoneRef = useRef<boolean>(false);
-  const statsSavedRef = useRef<boolean>(false);
   const { suggestions, clear: clearSuggestions } = useArtistAutocomplete(artistName);
 
-  // Sauvegarder les scores quand la partie se termine
-  useEffect(() => {
-    if (run && run.status === 'finished' && !statsSavedRef.current) {
-      statsSavedRef.current = true;
-      const turns = run.currentTurn - 1;
-      const score = run.playerScore;
-      const isWin = run.winner === 'player';
-      saveToLeaderboard(playerName, score, turns, 'Solo vs Bot');
-      updateStats({ mode: 'bot', score, turns, botWin: isWin, playerName });
-    }
-  }, [run?.status]);
+  // Pas de sauvegarde ici — c'est GameOverScreen qui appelle /api/solo/bot/finish
 
   // Démarrer la partie au montage
   useEffect(() => {
@@ -148,6 +138,26 @@ export default function SoloBotScreen({ playerName, onBackToHome }: SoloBotScree
   const canPlay = run.status === 'in_progress' && !isSubmitting && run.isPlayerTurn;
   const currentArtist = run.currentArtist || run.seedArtist;
 
+  // Écran de fin de partie
+  if (isGameFinished) {
+    return (
+      <GameOverScreen
+        data={{
+          score: run.playerScore,
+          turns: run.playerMoves.length,
+          mode: 'Solo Bot',
+          playerName,
+          winner: run.winner,
+          endReason: run.winner === 'bot' ? (run.endReason || 'INVALID_FEAT') : undefined,
+        }}
+        runId={run.id}
+        playerId={playerId}
+        onReplay={onReplay}
+        onBackToHome={onBackToHome}
+      />
+    );
+  }
+
   return (
     <div className="game-screen">
       <div className="container">
@@ -160,42 +170,8 @@ export default function SoloBotScreen({ playerName, onBackToHome }: SoloBotScree
           <div className="connection-status connected">🟢</div>
         </div>
 
-        {/* Fin de partie */}
-        {isGameFinished ? (
-          <div className="card game-finished-card fade-in">
-            <h2 className="finished-title">
-              {run.winner === 'player' ? '🎉 Victoire !' : '😵 Défaite !'}
-            </h2>
-            <div className="winner-section">
-              <p className="winner-text">
-                {run.winner === 'player'
-                  ? 'Le bot ne trouve plus de réponse !'
-                  : run.endReason === 'TIMEOUT'
-                  ? 'Temps écoulé !'
-                  : `${run.endReason || 'Erreur'}`}
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginTop: '1rem' }}>
-                <div>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Vous</p>
-                  <p className="winner-text"><strong>{run.playerScore}</strong></p>
-                </div>
-                <div>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Bot</p>
-                  <p className="winner-text"><strong>{run.botScore}</strong></p>
-                </div>
-              </div>
-              <p className="winner-text" style={{ fontSize: '1rem', marginTop: '0.5rem', color: 'var(--text-muted)' }}>
-                Tours joués: {run.currentTurn - 1}
-              </p>
-            </div>
-            <div className="finished-actions mt-3">
-              <button className="btn btn-primary w-full" onClick={onBackToHome}>
-                Retour à l'accueil
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
+        <>
+
             {/* Scores */}
             <div className="card players-card fade-in" style={{ marginBottom: '1rem' }}>
               <div className="players-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
@@ -320,8 +296,7 @@ export default function SoloBotScreen({ playerName, onBackToHome }: SoloBotScree
                 <p className="result-message">{botMessage}</p>
               </div>
             )}
-          </>
-        )}
+        </>
 
         {/* Historique */}
         {(run.playerMoves.length > 0 || run.botMoves.length > 0) && (

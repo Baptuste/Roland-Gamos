@@ -10,6 +10,9 @@ import { setupSocketHandlers } from './socketHandlers';
 import { soloManager } from './SoloManager';
 import { botManager } from './BotManager';
 import { gameDataStore } from '../services/GameDataStore';
+import { addXP } from '../services/XPService';
+import { checkUnlocks, triggerUnlock } from '../services/UnlockService';
+import { SoloRunStatus } from '../types/SoloRun';
 
 const app = express();
 const httpServer = createServer(app);
@@ -207,19 +210,119 @@ app.get('/api/solo/bot/run/:id', (req: express.Request, res: express.Response) =
 });
 
 // ============================================================
-// API Leaderboard
+// API Players (identification UUID)
 // ============================================================
 import { supabase } from '../services/supabaseClient';
+import { grantDefaultCosmetics } from '../services/UnlockService';
+
+// Créer ou retrouver un joueur via son UUID local
+app.post('/api/players/identify', async (req: express.Request, res: express.Response) => {
+  const { playerId, pseudo } = req.body;
+  if (!playerId || !pseudo) {
+    return res.status(400).json({ error: 'playerId et pseudo requis' });
+  }
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
+
+    // Upsert player
+    const { data: player, error } = await supabase
+      .from('players')
+      .upsert(
+        { id: playerId, pseudo: String(pseudo).trim(), last_seen_at: new Date().toISOString() },
+        { onConflict: 'id' }
+      )
+      .select()
+      .single();
+    if (error) throw error;
+
+    // Donner les cosmétiques par défaut si premier passage
+    await grantDefaultCosmetics(playerId);
+
+    res.json({ player });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Mettre à jour le pseudo
+app.patch('/api/players/:playerId/pseudo', async (req: express.Request, res: express.Response) => {
+  const { pseudo } = req.body;
+  if (!pseudo) return res.status(400).json({ error: 'pseudo requis' });
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
+    const { data, error } = await supabase
+      .from('players')
+      .update({ pseudo: String(pseudo).trim() })
+      .eq('id', req.params.playerId)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json({ player: data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Profil complet (player + stats + cosmétiques équipés)
+app.get('/api/players/:playerId/profile', async (req: express.Request, res: express.Response) => {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
+
+    const [playerRes, statsRes, unlockedRes] = await Promise.all([
+      supabase.from('players').select('*').eq('id', req.params.playerId).single(),
+      supabase.from('player_stats').select('*').eq('player_name', req.params.playerId).single(),
+      supabase
+        .from('cosmetics_unlocked')
+        .select('cosmetic_id, cosmetics_catalog(*)')
+        .eq('player_id', req.params.playerId),
+    ]);
+
+    if (playerRes.error && playerRes.error.code !== 'PGRST116') throw playerRes.error;
+    res.json({
+      player: playerRes.data || null,
+      stats: statsRes.data || null,
+      unlocked: (unlockedRes.data || []).map((r: any) => r.cosmetics_catalog),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Supprimer le compte
+app.delete('/api/players/:playerId', async (req: express.Request, res: express.Response) => {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
+    const { error } = await supabase.from('players').delete().eq('id', req.params.playerId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
+// API Leaderboard
+// ============================================================
 
 app.get('/api/leaderboard', async (req: express.Request, res: express.Response) => {
   try {
     const mode = req.query.mode as string | undefined;
+    const period = req.query.period as string | undefined; // 'week' | 'all'
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
 
     if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
 
-    let query = supabase.from('leaderboard').select('*').order('score', { ascending: false }).limit(limit);
+    let query = supabase
+      .from('leaderboard')
+      .select('id, score, turns, mode, created_at, players(id, pseudo, level, xp)')
+      .order('score', { ascending: false })
+      .limit(limit);
+
     if (mode && mode !== 'all') query = query.eq('mode', mode);
+    if (period === 'week') {
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte('created_at', weekAgo);
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -229,29 +332,60 @@ app.get('/api/leaderboard', async (req: express.Request, res: express.Response) 
   }
 });
 
+// Upsert leaderboard — garde uniquement le meilleur score par joueur par mode
 app.post('/api/leaderboard', async (req: express.Request, res: express.Response) => {
-  const { playerName, score, turns, mode } = req.body;
-  if (!playerName || score === undefined || !mode) {
-    return res.status(400).json({ error: 'playerName, score, mode requis' });
+  const { playerId, score, turns, mode } = req.body;
+  if (!playerId || score === undefined || !mode) {
+    return res.status(400).json({ error: 'playerId, score, mode requis' });
   }
   try {
     if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
 
-    const { data, error } = await supabase.from('leaderboard').insert({
-      player_name: String(playerName),
-      score: Number(score),
-      turns: Number(turns) || 0,
-      mode: String(mode),
-    }).select().single();
-    if (error) throw error;
-    res.json({ entry: data });
+    // Récupérer l'entrée existante
+    const { data: existing } = await supabase
+      .from('leaderboard')
+      .select('id, score, turns')
+      .eq('player_id', playerId)
+      .eq('mode', mode)
+      .single();
+
+    let entry;
+    if (!existing) {
+      const { data, error } = await supabase
+        .from('leaderboard')
+        .insert({ player_id: playerId, score: Number(score), turns: Number(turns) || 0, mode })
+        .select()
+        .single();
+      if (error) throw error;
+      entry = data;
+    } else if (Number(score) > existing.score) {
+      const { data, error } = await supabase
+        .from('leaderboard')
+        .update({ score: Number(score), turns: Number(turns) || 0, created_at: new Date().toISOString() })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (error) throw error;
+      entry = data;
+    } else {
+      entry = existing;
+    }
+
+    // Calculer le rang
+    const { count } = await supabase
+      .from('leaderboard')
+      .select('*', { count: 'exact', head: true })
+      .eq('mode', mode)
+      .gt('score', Number(score));
+
+    res.json({ entry, rank: (count || 0) + 1 });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // ============================================================
-// API Stats
+// API Stats (par player_name pour compatibilité existante)
 // ============================================================
 
 app.get('/api/stats/:playerName', async (req: express.Request, res: express.Response) => {
@@ -272,7 +406,13 @@ app.get('/api/stats/:playerName', async (req: express.Request, res: express.Resp
 
 app.post('/api/stats/:playerName', async (req: express.Request, res: express.Response) => {
   const playerName = req.params.playerName;
-  const update = req.body as { mode: string; score: number; turns: number; botWin?: boolean };
+  const update = req.body as {
+    mode: string;
+    score: number;
+    turns: number;
+    botWin?: boolean;
+    multiWin?: boolean;
+  };
 
   try {
     if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
@@ -285,6 +425,7 @@ app.post('/api/stats/:playerName', async (req: express.Request, res: express.Res
       total_games: 0, total_solo_games: 0, total_bot_games: 0, total_multiplayer_games: 0,
       best_solo_score: 0, best_solo_turns: 0, best_bot_score: 0,
       total_score: 0, bot_wins: 0, bot_losses: 0,
+      xp: 0, multiplayer_wins: 0, multiplayer_losses: 0, best_multiplayer_score: 0,
     };
 
     stats.total_games = (stats.total_games || 0) + 1;
@@ -299,8 +440,11 @@ app.post('/api/stats/:playerName', async (req: express.Request, res: express.Res
       if (Number(update.score) > (stats.best_bot_score || 0)) stats.best_bot_score = Number(update.score);
       if (update.botWin) stats.bot_wins = (stats.bot_wins || 0) + 1;
       else stats.bot_losses = (stats.bot_losses || 0) + 1;
-    } else {
+    } else if (update.mode === 'multiplayer') {
       stats.total_multiplayer_games = (stats.total_multiplayer_games || 0) + 1;
+      if (Number(update.score) > (stats.best_multiplayer_score || 0)) stats.best_multiplayer_score = Number(update.score);
+      if (update.multiWin) stats.multiplayer_wins = (stats.multiplayer_wins || 0) + 1;
+      else stats.multiplayer_losses = (stats.multiplayer_losses || 0) + 1;
     }
 
     stats.updated_at = new Date().toISOString();
@@ -311,6 +455,182 @@ app.post('/api/stats/:playerName', async (req: express.Request, res: express.Res
       .select().single();
     if (error) throw error;
     res.json({ stats: data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
+// Helpers fin de partie (XP + leaderboard + unlocks)
+// ============================================================
+
+async function handleGameFinish(params: {
+  playerId: string;
+  playerName: string;
+  score: number;
+  turns: number;
+  mode: 'Solo Infini' | 'Solo Bot' | 'Multijoueur';
+  botWin?: boolean;
+  multiWin?: boolean;
+}): Promise<{
+  leaderboard: { rank: number; score: number } | null;
+  xp: { gained: number; total: number; level: number; leveledUp: boolean; prestige: string } | null;
+  unlocks: any[];
+}> {
+  if (!supabase) return { leaderboard: null, xp: null, unlocks: [] };
+
+  // 1. Leaderboard upsert
+  let rank = 0;
+  try {
+    const { data: existing } = await supabase
+      .from('leaderboard')
+      .select('id, score')
+      .eq('player_id', params.playerId)
+      .eq('mode', params.mode)
+      .single();
+
+    if (!existing) {
+      await supabase.from('leaderboard').insert({
+        player_id: params.playerId,
+        score: params.score,
+        turns: params.turns,
+        mode: params.mode,
+      });
+    } else if (params.score > existing.score) {
+      await supabase.from('leaderboard')
+        .update({ score: params.score, turns: params.turns, created_at: new Date().toISOString() })
+        .eq('id', existing.id);
+    }
+
+    const { count } = await supabase
+      .from('leaderboard')
+      .select('*', { count: 'exact', head: true })
+      .eq('mode', params.mode)
+      .gt('score', params.score);
+    rank = (count || 0) + 1;
+  } catch { /* leaderboard non critique */ }
+
+  // 2. Stats
+  try {
+    const { data: existing } = await supabase
+      .from('player_stats').select('*').eq('player_name', params.playerName).single();
+
+    const s: Record<string, any> = existing || {
+      player_name: params.playerName,
+      total_games: 0, total_solo_games: 0, total_bot_games: 0, total_multiplayer_games: 0,
+      best_solo_score: 0, best_solo_turns: 0, best_bot_score: 0,
+      total_score: 0, bot_wins: 0, bot_losses: 0,
+      xp: 0, multiplayer_wins: 0, multiplayer_losses: 0, best_multiplayer_score: 0,
+    };
+
+    s.total_games = (s.total_games || 0) + 1;
+    s.total_score = (s.total_score || 0) + params.score;
+
+    if (params.mode === 'Solo Infini') {
+      s.total_solo_games = (s.total_solo_games || 0) + 1;
+      if (params.score > (s.best_solo_score || 0)) s.best_solo_score = params.score;
+      if (params.turns > (s.best_solo_turns || 0)) s.best_solo_turns = params.turns;
+    } else if (params.mode === 'Solo Bot') {
+      s.total_bot_games = (s.total_bot_games || 0) + 1;
+      if (params.score > (s.best_bot_score || 0)) s.best_bot_score = params.score;
+      if (!params.botWin) s.bot_wins = (s.bot_wins || 0) + 1;
+      else s.bot_losses = (s.bot_losses || 0) + 1;
+    } else {
+      s.total_multiplayer_games = (s.total_multiplayer_games || 0) + 1;
+      if (params.score > (s.best_multiplayer_score || 0)) s.best_multiplayer_score = params.score;
+      if (params.multiWin) s.multiplayer_wins = (s.multiplayer_wins || 0) + 1;
+      else s.multiplayer_losses = (s.multiplayer_losses || 0) + 1;
+    }
+
+    s.updated_at = new Date().toISOString();
+    await supabase.from('player_stats')
+      .upsert({ ...s, player_name: params.playerName }, { onConflict: 'player_name' });
+  } catch { /* stats non critique */ }
+
+  // 3. XP
+  const xpResult = await addXP(params.playerId, params.score);
+
+  // 4. Unlocks
+  const { data: statsRow } = await supabase
+    .from('player_stats')
+    .select('multiplayer_wins, bot_wins, best_solo_score')
+    .eq('player_name', params.playerName)
+    .single();
+
+  const newUnlocks = await checkUnlocks(params.playerId, xpResult.newLevel, statsRow || {});
+  for (const item of newUnlocks) {
+    await triggerUnlock(params.playerId, item.id);
+  }
+
+  // 5. Incrémenter total_score dans players
+  const { data: pRow } = await supabase.from('players').select('total_score').eq('id', params.playerId).single();
+  if (pRow) {
+    await supabase.from('players')
+      .update({ total_score: (pRow.total_score || 0) + params.score })
+      .eq('id', params.playerId)
+      .catch(() => {});
+  };
+
+  return {
+    leaderboard: { rank, score: params.score },
+    xp: {
+      gained: xpResult.xpGained,
+      total: xpResult.newXP,
+      level: xpResult.newLevel,
+      leveledUp: xpResult.leveledUp,
+      prestige: xpResult.prestige,
+    },
+    unlocks: newUnlocks,
+  };
+}
+
+// Fin de partie — Solo Infini
+app.post('/api/solo/infinite/finish', async (req: express.Request, res: express.Response) => {
+  const { runId, playerId, playerName } = req.body;
+  if (!runId || !playerId || !playerName) {
+    return res.status(400).json({ error: 'runId, playerId, playerName requis' });
+  }
+  try {
+    const run = soloManager.getRun(runId);
+    if (!run) return res.status(404).json({ error: 'Run introuvable' });
+    if (run.status !== SoloRunStatus.FINISHED) return res.status(400).json({ error: 'Run pas encore terminée' });
+
+    const result = await handleGameFinish({
+      playerId,
+      playerName,
+      score: run.totalScore,
+      turns: run.currentTurn - 1,
+      mode: 'Solo Infini',
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Fin de partie — Solo Bot
+app.post('/api/solo/bot/finish', async (req: express.Request, res: express.Response) => {
+  const { runId, playerId, playerName } = req.body;
+  if (!runId || !playerId || !playerName) {
+    return res.status(400).json({ error: 'runId, playerId, playerName requis' });
+  }
+  try {
+    const run = botManager.getRun(runId);
+    if (!run) return res.status(404).json({ error: 'Partie introuvable' });
+    if (run.status !== SoloRunStatus.FINISHED) return res.status(400).json({ error: 'Partie pas encore terminée' });
+
+    const playerWon = run.winner === 'player';
+    const result = await handleGameFinish({
+      playerId,
+      playerName,
+      score: run.playerScore,
+      turns: run.playerMoves.length,
+      mode: 'Solo Bot',
+      botWin: !playerWon,
+    });
+
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

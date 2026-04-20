@@ -2,18 +2,19 @@ import { useState, useEffect, useRef, FormEvent } from 'react';
 import { SoloRunStatus } from '../shared/types';
 import { useSoloInfiniteGame } from '../hooks/useSoloInfiniteGame';
 import { useArtistAutocomplete } from '../hooks/useArtistAutocomplete';
-import { saveToLeaderboard } from './LeaderboardScreen';
-import { updateStats } from './StatsScreen';
+import GameOverScreen from './GameOverScreen';
 import '../styles/GameScreen.css';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 interface SoloInfiniteScreenProps {
   playerName: string;
+  playerId: string;
   onBackToHome: () => void;
+  onReplay: () => void;
 }
 
-export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInfiniteScreenProps) {
+export default function SoloInfiniteScreen({ playerName, playerId, onBackToHome, onReplay }: SoloInfiniteScreenProps) {
   const { run, isLoading, timeRemaining, startRun, makeMove } = useSoloInfiniteGame();
   const [artistName, setArtistName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,18 +26,7 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
   const [showHints, setShowHints] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const statsSavedRef = useRef(false);
   const { suggestions, clear: clearSuggestions } = useArtistAutocomplete(artistName);
-
-  // Sauvegarder les scores quand la partie se termine
-  useEffect(() => {
-    if (run && run.status === SoloRunStatus.FINISHED && !statsSavedRef.current) {
-      statsSavedRef.current = true;
-      const turns = run.currentTurn - 1;
-      saveToLeaderboard(playerName, run.totalScore, turns, 'Solo Infini');
-      updateStats({ mode: 'solo', score: run.totalScore, turns, playerName });
-    }
-  }, [run?.status]);
 
   // Démarrer la run au montage
   useEffect(() => {
@@ -120,10 +110,29 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
   const canPlay = run.status === SoloRunStatus.IN_PROGRESS && !isSubmitting && !isGameFinished;
   const currentArtist = run.currentArtist || run.seedArtist;
 
+  // Afficher l'écran de fin de partie
+  if (isGameFinished) {
+    return (
+      <GameOverScreen
+        data={{
+          score: run.totalScore,
+          turns: run.currentTurn - 1,
+          mode: 'Solo Infini',
+          playerName,
+          endReason: run.endReason,
+        }}
+        runId={run.id}
+        playerId={playerId}
+        onReplay={onReplay}
+        onBackToHome={onBackToHome}
+      />
+    );
+  }
+
   return (
     <div className="game-screen">
       <div className="container">
-        {/* Header - même style que multijoueur */}
+        {/* Header */}
         <div className="game-header">
           <button className="btn btn-secondary btn-back" onClick={onBackToHome}>
             ← Retour
@@ -134,37 +143,8 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
           </div>
         </div>
 
-        {/* Statut de la partie - même style que multijoueur */}
-        {isGameFinished ? (
-          <div className="card game-finished-card fade-in">
-            <h2 className="finished-title">🎉 Game Over !</h2>
-            <div className="winner-section">
-              <p className="winner-text">
-                Score final: <strong>{run.totalScore}</strong>
-              </p>
-              <p className="winner-text" style={{ fontSize: '1.2rem', marginTop: '0.5rem' }}>
-                Tour atteint: {run.currentTurn - 1}
-              </p>
-              {run.endReason && (
-                <p className="winner-text" style={{ fontSize: '1rem', marginTop: '0.5rem', color: 'var(--text-muted)' }}>
-                  Raison: {
-                    run.endReason === 'TIMEOUT' ? '⏱️ Temps écoulé' :
-                    run.endReason === 'REPEAT' ? '🔄 Artiste déjà utilisé' :
-                    run.endReason === 'INVALID_FEAT' ? '❌ Aucune collaboration trouvée' :
-                    '❌ Erreur'
-                  }
-                </p>
-              )}
-            </div>
-            <div className="finished-actions mt-3">
-              <button className="btn btn-primary w-full" onClick={onBackToHome}>
-                Retour à l'accueil
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Joueur actuel - même style que multijoueur */}
+        {/* Joueur actuel */}
+        <>
             <div className="card current-player-card fade-in">
               <div className="current-player-header">
                 <span className="player-badge">Mode Solo</span>
@@ -315,8 +295,7 @@ export default function SoloInfiniteScreen({ playerName, onBackToHome }: SoloInf
                 </div>
               </div>
             </div>
-          </>
-        )}
+        </>
 
         {/* Historique */}
         {run.moves.length > 0 && (

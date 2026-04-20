@@ -5,8 +5,12 @@ import SoloInfiniteScreen from './screens/SoloInfiniteScreen';
 import SoloBotScreen from './screens/SoloBotScreen';
 import LeaderboardScreen from './screens/LeaderboardScreen';
 import StatsScreen from './screens/StatsScreen';
+import ProfileScreen from './screens/ProfileScreen';
+import SettingsScreen from './screens/SettingsScreen';
 import { Game, Player, GameStatus } from './shared/types';
 import { socketService } from './services/socketService';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 // Clés pour le localStorage
 const STORAGE_KEYS = {
@@ -14,9 +18,20 @@ const STORAGE_KEYS = {
   PLAYER_ID: 'roland-gamos-player-id',
   PLAYER_NAME: 'roland-gamos-player-name',
   GAME_ID: 'roland-gamos-game-id',
+  SOLO_PLAYER_UUID: 'roland-gamos-solo-uuid', // UUID persistant pour les modes solo
 };
 
-type Screen = 'home' | 'solo' | 'bot' | 'leaderboard' | 'stats' | 'multiplayer';
+/** Génère ou retrouve l'UUID solo du joueur */
+function getSoloPlayerId(): string {
+  let uuid = localStorage.getItem(STORAGE_KEYS.SOLO_PLAYER_UUID);
+  if (!uuid) {
+    uuid = crypto.randomUUID();
+    localStorage.setItem(STORAGE_KEYS.SOLO_PLAYER_UUID, uuid);
+  }
+  return uuid;
+}
+
+type Screen = 'home' | 'solo' | 'bot' | 'leaderboard' | 'stats' | 'multiplayer' | 'profile' | 'settings';
 
 function App() {
   const [currentGame, setCurrentGame] = useState<Game | null>(null);
@@ -24,6 +39,7 @@ function App() {
   const [gameCode, setGameCode] = useState<string | null>(null);
   const [soloPlayerName, setSoloPlayerName] = useState<string | null>(null);
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
+  const soloPlayerId = getSoloPlayerId();
 
   useEffect(() => {
     // Se connecter au serveur au démarrage
@@ -237,12 +253,34 @@ function App() {
 
   const handleStartSolo = (playerName: string) => {
     setSoloPlayerName(playerName);
+    // Identifier le joueur en base (fire and forget)
+    fetch(`${BACKEND_URL}/api/players/identify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: soloPlayerId, pseudo: playerName }),
+    }).catch(() => {});
     setCurrentScreen('solo');
   };
 
   const handleStartBot = (playerName: string) => {
     setSoloPlayerName(playerName);
+    fetch(`${BACKEND_URL}/api/players/identify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: soloPlayerId, pseudo: playerName }),
+    }).catch(() => {});
     setCurrentScreen('bot');
+  };
+
+  const handleReplaySolo = () => {
+    // Relancer le même mode avec le même nom
+    setCurrentScreen('home'); // reset pour forcer remontage du screen
+    setTimeout(() => setCurrentScreen('solo'), 50);
+  };
+
+  const handleReplayBot = () => {
+    setCurrentScreen('home');
+    setTimeout(() => setCurrentScreen('bot'), 50);
   };
 
   // Écrans secondaires
@@ -254,12 +292,36 @@ function App() {
     return <StatsScreen playerName={soloPlayerName || undefined} onBackToHome={handleBackToHome} />;
   }
 
+  if (currentScreen === 'profile') {
+    return (
+      <ProfileScreen
+        playerId={soloPlayerId}
+        playerName={soloPlayerName || ''}
+        onBackToHome={handleBackToHome}
+        onEditSettings={() => setCurrentScreen('settings')}
+      />
+    );
+  }
+
+  if (currentScreen === 'settings') {
+    return (
+      <SettingsScreen
+        playerId={soloPlayerId}
+        currentPseudo={soloPlayerName || ''}
+        onBackToHome={handleBackToHome}
+        onPseudoChange={(newPseudo) => setSoloPlayerName(newPseudo)}
+      />
+    );
+  }
+
   // Solo infini
   if (currentScreen === 'solo' && soloPlayerName) {
     return (
       <SoloInfiniteScreen
         playerName={soloPlayerName}
+        playerId={soloPlayerId}
         onBackToHome={handleBackToHome}
+        onReplay={handleReplaySolo}
       />
     );
   }
@@ -269,7 +331,9 @@ function App() {
     return (
       <SoloBotScreen
         playerName={soloPlayerName}
+        playerId={soloPlayerId}
         onBackToHome={handleBackToHome}
+        onReplay={handleReplayBot}
       />
     );
   }
