@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roland-Gamos — Charte Graphique v1.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --rouge:#FF2D2D;--orange:#FF6B00;--violet:#9B00FF;--bleu:#00A8FF;--or:#FFD700;
+  --bg:#080808;--bg2:#0F0F0F;--bg3:#1A1A1A;--bg4:#222;
+  --border:#2A2A2A;--text:#FFFFFF;--dim:#777;
+}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Press Start 2P',monospace;
+  font-size:8px;line-height:1.8;overflow-x:hidden;
+}
+body::after{
+  content:'';position:fixed;top:0;left:0;width:100%;height:100%;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.12) 2px,rgba(0,0,0,0.12) 4px);
+  pointer-events:none;z-index:9999;
+}
+
+/* ─── HEADER ─── */
+.header{
+  position:relative;padding:80px 48px 60px;text-align:center;
+  border-bottom:3px solid var(--rouge);
+  background:radial-gradient(ellipse at 20% 50%,rgba(255,45,45,.1) 0%,transparent 55%),
+             radial-gradient(ellipse at 80% 50%,rgba(155,0,255,.1) 0%,transparent 55%),
+             linear-gradient(180deg,#130000 0%,var(--bg) 100%);
+  overflow:hidden;
+}
+.header-corners::before,.header-corners::after{
+  content:'';position:absolute;width:20px;height:20px;border-color:var(--orange);border-style:solid;
+}
+.header-corners::before{top:16px;left:16px;border-width:2px 0 0 2px}
+.header-corners::after{top:16px;right:16px;border-width:2px 2px 0 0}
+.header-tag{font-size:6px;color:var(--orange);letter-spacing:4px;margin-bottom:20px;opacity:.8}
+.header-title{
+  font-size:clamp(20px,5vw,40px);color:#fff;letter-spacing:3px;margin-bottom:10px;
+  text-shadow:0 0 20px var(--rouge),0 0 50px rgba(255,45,45,.4),4px 4px 0 #600000;
+}
+.header-sub{
+  font-size:clamp(7px,1.5vw,11px);color:var(--orange);letter-spacing:6px;
+  text-shadow:0 0 12px var(--orange);margin-bottom:40px;
+}
+.header-badges{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.badge{
+  font-size:5px;padding:5px 10px;border:1px solid;letter-spacing:2px;
+}
+.badge-r{border-color:var(--rouge);color:var(--rouge)}
+.badge-o{border-color:var(--orange);color:var(--orange)}
+.badge-v{border-color:var(--violet);color:var(--violet)}
+.badge-b{border-color:var(--bleu);color:var(--bleu)}
+
+/* ─── GRADIENT BAR ─── */
+.grad-bar{height:4px;background:linear-gradient(90deg,var(--rouge),var(--orange),var(--violet),var(--bleu))}
+
+/* ─── NAV ─── */
+nav{
+  display:flex;justify-content:center;flex-wrap:wrap;
+  background:var(--bg2);border-bottom:2px solid var(--border);position:sticky;top:0;z-index:100;
+}
+nav a{
+  color:var(--dim);text-decoration:none;padding:14px 16px;font-size:5px;
+  letter-spacing:1px;border-right:1px solid var(--border);transition:.1s;
+}
+nav a:hover{color:var(--orange);background:rgba(255,107,0,.08)}
+
+/* ─── SECTIONS ─── */
+section{padding:56px 48px;border-bottom:1px solid var(--border)}
+section:nth-child(even){background:var(--bg2)}
+.sec-num{font-size:5px;color:var(--orange);letter-spacing:3px;margin-bottom:6px}
+.sec-title{
+  font-size:clamp(12px,2.5vw,18px);color:#fff;margin-bottom:32px;
+  border-left:4px solid var(--rouge);padding-left:14px;
+  text-shadow:2px 2px 0 #3a0000;
+}
+.sec-title span{color:var(--rouge)}
+
+/* ─── GRIDS ─── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr}}
+@media(max-width:600px){section{padding:40px 20px}.header{padding:50px 20px}}
+
+/* ─── CARD ─── */
+.card{background:var(--bg3);border:2px solid var(--border);padding:20px}
+.card-title{font-size:6px;color:var(--orange);margin-bottom:14px;letter-spacing:2px}
+
+/* ─── HIGHLIGHT ─── */
+.hl{
+  background:rgba(255,107,0,.06);border-left:3px solid var(--orange);
+  padding:12px 16px;font-size:6px;color:var(--dim);line-height:2.2;margin:16px 0;
+}
+
+/* ─── SPEC LIST ─── */
+.spec-list{list-style:none}
+.spec-list li{
+  font-size:6px;color:var(--dim);padding:7px 0;
+  border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:baseline;
+}
+.spec-list li::before{content:'▶';color:var(--orange);flex-shrink:0;font-size:5px}
+.spec-list li strong{color:#fff}
+
+/* ─── COLOR SWATCHES ─── */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.swatch{border:2px solid var(--border);overflow:hidden}
+.swatch-prev{
+  height:72px;position:relative;
+  background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,.08) 4px,rgba(0,0,0,.08) 8px);
+}
+.swatch-body{padding:10px;background:var(--bg3)}
+.swatch-name{font-size:5px;color:#fff;margin-bottom:3px}
+.swatch-hex{font-family:'VT323',monospace;font-size:16px;color:var(--dim)}
+.swatch-role{font-size:5px;color:var(--dim);margin-top:5px;line-height:1.6}
+.group-label{
+  font-size:5px;color:var(--dim);letter-spacing:3px;text-transform:uppercase;margin-bottom:12px;
+}
+
+/* ─── TAGS ─── */
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag{font-size:5px;padding:3px 7px;border:1px solid;letter-spacing:1px}
+.tag-r{border-color:var(--rouge);color:var(--rouge)}
+.tag-o{border-color:var(--orange);color:var(--orange)}
+.tag-v{border-color:var(--violet);color:var(--violet)}
+.tag-b{border-color:var(--bleu);color:var(--bleu)}
+.tag-or{border-color:var(--or);color:var(--or)}
+
+/* ─── BUTTONS ─── */
+.btn{
+  display:inline-block;padding:10px 18px;font-family:'Press Start 2P',monospace;
+  font-size:6px;letter-spacing:1px;border:none;cursor:pointer;
+}
+.btn-p{background:var(--rouge);color:#fff;box-shadow:4px 4px 0 #700000}
+.btn-s{background:transparent;color:var(--orange);border:2px solid var(--orange);box-shadow:4px 4px 0 #602500}
+.btn-sp{background:var(--violet);color:#fff;box-shadow:4px 4px 0 #380060}
+.btn-d{background:#2a2a2a;color:#555;box-shadow:4px 4px 0 #111}
+
+/* ─── AURA DEMOS ─── */
+.aura-wrap{
+  position:relative;height:110px;background:#050505;
+  border:2px solid var(--border);display:flex;align-items:center;justify-content:center;
+}
+.aura-avt{
+  width:44px;height:44px;background:var(--bg3);border:2px solid #444;
+  position:relative;z-index:2;display:flex;align-items:center;justify-content:center;
+  font-size:5px;color:var(--dim);
+}
+.aura-fire{
+  position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+  width:72px;height:80px;
+  background:radial-gradient(ellipse at 50% 80%,rgba(255,107,0,.85) 0%,rgba(255,45,45,.4) 40%,transparent 70%);
+  filter:blur(5px);z-index:1;
+  animation:flicker .45s ease-in-out infinite alternate;
+}
+.aura-gold{
+  position:absolute;inset:8px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(255,215,0,.25) 0%,transparent 70%);
+  box-shadow:0 0 18px rgba(255,215,0,.6),0 0 36px rgba(255,215,0,.25);
+  z-index:1;animation:pulse 1.1s ease-in-out infinite alternate;
+}
+.aura-elec{
+  position:absolute;inset:4px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(0,168,255,.15) 0%,transparent 70%);
+  box-shadow:0 0 14px rgba(0,168,255,.9),0 0 28px rgba(155,0,255,.5);
+  z-index:1;animation:elec .28s ease-in-out infinite alternate;
+}
+@keyframes flicker{from{transform:translateX(-50%) scaleX(.88);opacity:.75}to{transform:translateX(-50%) scaleX(1.12);opacity:1}}
+@keyframes pulse{from{opacity:.55;transform:scale(.94)}to{opacity:1;transform:scale(1.06)}}
+@keyframes elec{from{box-shadow:0 0 14px rgba(0,168,255,.9),0 0 28px rgba(155,0,255,.5)}to{box-shadow:0 0 24px rgba(0,168,255,1),0 0 50px rgba(155,0,255,.9),0 0 70px rgba(0,168,255,.3)}}
+
+/* ─── ENV CARDS ─── */
+.env-card{background:var(--bg3);border:2px solid var(--border);overflow:hidden}
+.env-prev{height:140px;position:relative;overflow:hidden}
+.env-prev-label{position:absolute;bottom:10px;left:10px;font-size:5px;color:var(--orange);letter-spacing:2px}
+.env-body{padding:16px}
+.env-title{font-size:7px;color:#fff;margin-bottom:8px}
+.env-desc{font-size:5px;color:var(--dim);line-height:2}
+
+/* ─── PIPELINE ─── */
+.pipeline{display:flex;overflow-x:auto;gap:0;margin:20px 0}
+.pipe-step{
+  flex:1;min-width:80px;text-align:center;padding:14px 6px;
+  background:var(--bg3);border:2px solid var(--border);border-right:none;position:relative;
+}
+.pipe-step:last-child{border-right:2px solid var(--border)}
+.pipe-step::after{
+  content:'▶';position:absolute;right:-10px;top:50%;transform:translateY(-50%);
+  color:var(--orange);font-size:7px;z-index:5;
+}
+.pipe-step:last-child::after{display:none}
+.pipe-num{display:block;font-size:14px;color:var(--orange);margin-bottom:6px}
+.pipe-lbl{font-size:5px;color:var(--dim);line-height:1.8}
+
+/* ─── EFFECTS ─── */
+.eff-item{
+  display:flex;align-items:center;gap:14px;padding:12px 16px;
+  border:1px solid var(--border);margin-bottom:8px;background:var(--bg3);
+}
+.eff-dot{width:12px;height:12px;flex-shrink:0}
+.eff-name{font-size:5px;color:#fff;flex:1}
+.eff-desc{font-size:5px;color:var(--dim);text-align:right}
+
+/* ─── RULES ─── */
+.rules-no{background:rgba(255,45,45,.04);border:2px solid rgba(255,45,45,.25);padding:20px}
+.rules-yes{background:rgba(0,168,255,.04);border:2px solid rgba(0,168,255,.25);padding:20px}
+.rules-title{font-size:6px;margin-bottom:14px;letter-spacing:2px}
+.r-no{color:var(--rouge)}.r-yes{color:var(--bleu)}
+.rule-item{font-size:5px;color:var(--dim);padding:6px 0;border-bottom:1px solid rgba(255,45,45,.08);display:flex;gap:8px}
+.rule-item::before{content:'✕';color:var(--rouge);flex-shrink:0}
+.ok-item{font-size:5px;color:var(--dim);padding:6px 0;border-bottom:1px solid rgba(0,168,255,.08);display:flex;gap:8px}
+.ok-item::before{content:'✓';color:var(--bleu);flex-shrink:0}
+
+/* ─── FOOTER ─── */
+footer{
+  padding:48px;text-align:center;background:var(--bg2);
+  border-top:3px solid var(--rouge);
+}
+.foot-title{
+  font-size:clamp(12px,2vw,16px);color:var(--rouge);
+  text-shadow:0 0 12px var(--rouge);margin-bottom:16px;
+}
+.foot-text{font-size:5px;color:var(--dim);line-height:2.5}
+
+/* ─── HUD MOCK ─── */
+.hud{background:#000;border:2px solid #1a1a1a;padding:14px;font-size:5px}
+
+/* ─── NEON TEXT ─── */
+.neon-r{color:var(--rouge);text-shadow:0 0 10px var(--rouge),0 0 20px var(--rouge)}
+.neon-o{color:var(--orange);text-shadow:0 0 10px var(--orange)}
+.neon-v{color:var(--violet);text-shadow:0 0 10px var(--violet)}
+.neon-b{color:var(--bleu);text-shadow:0 0 10px var(--bleu)}
+
+/* ─── PIXEL ART AVATAR ─── */
+.px-canvas{
+  width:128px;height:128px;background:#0d0d0d;
+  border:2px solid var(--border);image-rendering:pixelated;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);
+  background-size:8px 8px;
+}
+.px-canvas svg{image-rendering:pixelated;width:100%;height:100%}
+
+/* ─── OVERLAY FRAMES ─── */
+.frame-wrap{text-align:center}
+.frame-box{
+  width:80px;height:80px;display:flex;align-items:center;justify-content:center;
+  margin:0 auto 6px;border:3px solid;
+}
+.frame-inner{width:48px;height:48px;background:var(--bg3)}
+.frame-lbl{font-size:5px}
+
+/* ─── ARCANE ANIMATION ─── */
+@keyframes arcpulse{from{opacity:.7}to{opacity:1}}
+.arcade-text-anim{animation:arcpulse .4s ease-in-out infinite alternate}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ HEADER ══════════════════ -->
+<header class="header">
+  <div class="header-corners"></div>
+  <p class="header-tag">// CHARTE GRAPHIQUE OFFICIELLE //</p>
+  <h1 class="header-title">ROLAND-GAMOS</h1>
+  <p class="header-sub">DIRECTION ARTISTIQUE v1.0 · 2026</p>
+  <div class="header-badges">
+    <span class="badge badge-r">PIXEL ART</span>
+    <span class="badge badge-o">URBAIN</span>
+    <span class="badge badge-v">HIP-HOP</span>
+    <span class="badge badge-b">COMPÉTITIF</span>
+  </div>
+</header>
+
+<div class="grad-bar"></div>
+
+<!-- ══════════════════ NAV ══════════════════ -->
+<nav>
+  <a href="#vision">VISION</a>
+  <a href="#palette">PALETTE</a>
+  <a href="#typo">TYPO</a>
+  <a href="#avatars">AVATARS</a>
+  <a href="#auras">AURAS</a>
+  <a href="#overlays">OVERLAYS</a>
+  <a href="#envs">ENVS</a>
+  <a href="#ui">UI</a>
+  <a href="#effets">EFFETS</a>
+  <a href="#regles">RÈGLES</a>
+</nav>
+
+<!-- ══════════════════ 01 VISION ══════════════════ -->
+<section id="vision">
+  <p class="sec-num">01 //</p>
+  <h2 class="sec-title">VISION <span>ARTISTIQUE</span></h2>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);border:2px solid var(--border);margin-bottom:32px">
+    <div style="padding:24px;text-align:center;border-right:1px solid var(--border)">
+      <div style="font-size:22px;margin-bottom:10px">🎮</div>
+      <div style="font-size:5px;color:var(--dim);letter-spacing:2px;margin-bottom:8px">STYLE</div>
+      <div style="font-size:7px;color:var(--orange)">PIXEL ART<br>MODERNE</div>
+    </div>
+    <div style="padding:24px;text-align:center;border-right:1px solid var(--border)">
+      <div style="font-size:22px;margin-bottom:10px">🎤</div>
+      <div style="font-size:5px;color:var(--dim);letter-spacing:2px;margin-bottom:8px">UNIVERS</div>
+      <div style="font-size:7px;color:var(--orange)">RAP / HIP-HOP<br>URBAIN NOCTURNE</div>
+    </div>
+    <div style="padding:24px;text-align:center">
+      <div style="font-size:22px;margin-bottom:10px">⚡</div>
+      <div style="font-size:5px;color:var(--dim);letter-spacing:2px;margin-bottom:8px">AMBIANCE</div>
+      <div style="font-size:7px;color:var(--orange)">COMPÉTITIF<br>INTENSE</div>
+    </div>
+  </div>
+
+  <div class="hl">
+    ▶ 100% du jeu est en pixel art — menus, avatars, décors, UI, effets visuels, personnalisation.<br>
+    ▶ Aucune rupture de style n'est autorisée. Zéro exception.
+  </div>
+
+  <div class="g2" style="margin-top:24px">
+    <div class="card">
+      <p class="card-title">PRINCIPES FONDAMENTAUX</p>
+      <ul class="spec-list">
+        <li><strong>Moderne</strong> — Pas de pixel art rétro classique</li>
+        <li><strong>Dynamique</strong> — Énergie et mouvement permanent</li>
+        <li><strong>Lisible mobile</strong> — Priorité sur petit écran en mouvement</li>
+        <li><strong>Cohérent</strong> — Même style partout, du menu au gameplay</li>
+        <li><strong>Compétitif</strong> — Adapté à l'expérience versus fighting</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="card-title">ATMOSPHÈRE & ÉLÉMENTS VISUELS</p>
+      <ul class="spec-list">
+        <li><strong>Néons</strong> — Parfois instables ou défectueux</li>
+        <li><strong>Murs urbains</strong> — Béton, briques, tags, graffitis</li>
+        <li><strong>Impacts</strong> — Traces de combat symbolique</li>
+        <li><strong>Câbles / industriel</strong> — Équipements de studio ou rue</li>
+        <li><strong>Éclairs électriques</strong> — Tension, danger, jokers</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ 02 PALETTE ══════════════════ -->
+<section id="palette">
+  <p class="sec-num">02 //</p>
+  <h2 class="sec-title">PALETTE DE <span>COULEURS</span></h2>
+
+  <div style="margin-bottom:28px">
+    <p class="group-label">COULEURS PRIMAIRES — TENSION & COMPÉTITION</p>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="swatch-prev" style="background:#FF2D2D">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:7px;color:#fff;border:1px solid rgba(255,255,255,.5);padding:4px 10px;letter-spacing:2px">ROUGE</span>
+          </div>
+        </div>
+        <div class="swatch-body">
+          <p class="swatch-name">ROUGE VIF</p>
+          <p class="swatch-hex">#FF2D2D</p>
+          <p class="swatch-role">Tension · Danger · Action principale · Boutons CTA</p>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-prev" style="background:#FF6B00">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:7px;color:#fff;border:1px solid rgba(255,255,255,.5);padding:4px 10px;letter-spacing:2px">ORANGE</span>
+          </div>
+        </div>
+        <div class="swatch-body">
+          <p class="swatch-name">ORANGE FEU</p>
+          <p class="swatch-hex">#FF6B00</p>
+          <p class="swatch-role">Énergie · Streak · Accents chauds · Highlights</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:28px">
+    <p class="group-label">COULEURS SECONDAIRES — AMBIANCE & CONTRASTE</p>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="swatch-prev" style="background:#9B00FF">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:7px;color:#fff;border:1px solid rgba(255,255,255,.5);padding:4px 10px;letter-spacing:2px">VIOLET</span>
+          </div>
+        </div>
+        <div class="swatch-body">
+          <p class="swatch-name">VIOLET NUIT</p>
+          <p class="swatch-hex">#9B00FF</p>
+          <p class="swatch-role">Nocturne · Jokers · Mystère · Stylisation</p>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-prev" style="background:#00A8FF">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:7px;color:#fff;border:1px solid rgba(255,255,255,.5);padding:4px 10px;letter-spacing:2px">BLEU</span>
+          </div>
+        </div>
+        <div class="swatch-body">
+          <p class="swatch-name">BLEU ÉLECTRIQUE</p>
+          <p class="swatch-hex">#00A8FF</p>
+          <p class="swatch-role">Technologie · Contraste · Équilibre visuel</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:28px">
+    <p class="group-label">COULEURS SUPPORT</p>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="swatch-prev" style="background:#FFD700">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:7px;color:#000;border:1px solid rgba(0,0,0,.3);padding:4px 10px;letter-spacing:2px">GOLD</span>
+          </div>
+        </div>
+        <div class="swatch-body">
+          <p class="swatch-name">OR / GOLD</p>
+          <p class="swatch-hex">#FFD700</p>
+          <p class="swatch-role">Leadership · Aura leader · Récompenses</p>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-prev" style="background:#080808;border-bottom:1px solid #222">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:7px;color:#333;border:1px solid #333;padding:4px 10px;letter-spacing:2px">VOID</span>
+          </div>
+        </div>
+        <div class="swatch-body">
+          <p class="swatch-name">NOIR PROFOND</p>
+          <p class="swatch-hex">#080808</p>
+          <p class="swatch-role">Fond principal · Base universelle · UI</p>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-prev" style="background:#FFFFFF">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:7px;color:#000;border:1px solid rgba(0,0,0,.2);padding:4px 10px;letter-spacing:2px">WHITE</span>
+          </div>
+        </div>
+        <div class="swatch-body">
+          <p class="swatch-name">BLANC PUR</p>
+          <p class="swatch-hex">#FFFFFF</p>
+          <p class="swatch-role">Texte principal · Contraste max</p>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-prev" style="background:#777">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:7px;color:#fff;border:1px solid rgba(255,255,255,.4);padding:4px 10px;letter-spacing:2px">GREY</span>
+          </div>
+        </div>
+        <div class="swatch-body">
+          <p class="swatch-name">GRIS URBAIN</p>
+          <p class="swatch-hex">#777777</p>
+          <p class="swatch-role">Texte secondaire · Désactivés</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:20px;background:var(--bg3);border:2px solid var(--border)">
+    <p class="card-title" style="margin-bottom:14px">DÉGRADÉ IDENTITAIRE</p>
+    <div style="height:44px;background:linear-gradient(90deg,#FF2D2D,#FF6B00,#9B00FF,#00A8FF);margin-bottom:10px"></div>
+    <p style="font-size:5px;color:var(--dim);letter-spacing:2px">ROUGE → ORANGE → VIOLET → BLEU ÉLECTRIQUE</p>
+    <p style="font-size:5px;color:var(--dim);margin-top:6px">Usage : séparateurs de sections, barres de progression, éléments de transition UI</p>
+  </div>
+
+  <div style="margin-top:20px;padding:16px;background:rgba(255,45,45,.05);border:1px solid rgba(255,45,45,.2)">
+    <p style="font-size:5px;color:var(--dim);line-height:2.2">
+      <span class="neon-r">●</span> Éviter les palettes ternes &nbsp;|&nbsp;
+      <span class="neon-o">●</span> Maintenir un contraste élevé &nbsp;|&nbsp;
+      <span class="neon-v">●</span> Couleurs franches (flat colors) &nbsp;|&nbsp;
+      <span class="neon-b">●</span> Éviter les dégradés complexes sur assets
+    </p>
+  </div>
+</section>
+
+<!-- ══════════════════ 03 TYPOGRAPHIE ══════════════════ -->
+<section id="typo">
+  <p class="sec-num">03 //</p>
+  <h2 class="sec-title">TYPO<span>GRAPHIE</span></h2>
+
+  <div class="g2">
+    <div>
+      <div class="card" style="margin-bottom:10px">
+        <p class="card-title">POLICE PRINCIPALE</p>
+        <p style="font-family:'Press Start 2P',monospace;font-size:20px;color:#fff;margin-bottom:8px">ABCDEFabcdef</p>
+        <p style="font-family:'Press Start 2P',monospace;font-size:10px;color:var(--orange);margin-bottom:8px">Roland-Gamos</p>
+        <p style="font-family:'Press Start 2P',monospace;font-size:7px;color:var(--dim)">0123456789 !?#@%</p>
+      </div>
+      <div style="font-size:5px;color:var(--dim);line-height:2;padding:10px;background:var(--bg3);border:1px solid var(--border)">
+        <strong style="color:#fff">Press Start 2P</strong> — Titres, menus, boutons CTA, scores, toutes interfaces principales
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:10px">
+        <p class="card-title">POLICE SECONDAIRE</p>
+        <p style="font-family:'VT323',monospace;font-size:38px;color:#fff;margin-bottom:4px">ABCDEFabcdef</p>
+        <p style="font-family:'VT323',monospace;font-size:26px;color:var(--orange);margin-bottom:4px">Roland-Gamos 2026</p>
+        <p style="font-family:'VT323',monospace;font-size:22px;color:var(--dim)">0123456789 !?#@%</p>
+      </div>
+      <div style="font-size:5px;color:var(--dim);line-height:2;padding:10px;background:var(--bg3);border:1px solid var(--border)">
+        <strong style="color:#fff">VT323</strong> — Chrono, scores live, HUD, données secondaires, labels
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;padding:20px;background:var(--bg3);border:2px solid var(--border)">
+    <p class="card-title" style="margin-bottom:18px">HIÉRARCHIE TYPOGRAPHIQUE</p>
+    <div style="border-bottom:1px solid var(--border);padding:12px 0;display:flex;gap:20px;align-items:center">
+      <span style="font-size:5px;color:var(--dim);width:70px;flex-shrink:0">H1 TITRE</span>
+      <span style="font-family:'Press Start 2P';font-size:clamp(14px,3vw,22px);color:var(--rouge);text-shadow:2px 2px 0 #500000">ROLAND-GAMOS</span>
+    </div>
+    <div style="border-bottom:1px solid var(--border);padding:12px 0;display:flex;gap:20px;align-items:center">
+      <span style="font-size:5px;color:var(--dim);width:70px;flex-shrink:0">H2 SECTION</span>
+      <span style="font-family:'Press Start 2P';font-size:clamp(9px,2vw,13px);color:var(--orange)">SALLE MULTIJOUEUR</span>
+    </div>
+    <div style="border-bottom:1px solid var(--border);padding:12px 0;display:flex;gap:20px;align-items:center">
+      <span style="font-size:5px;color:var(--dim);width:70px;flex-shrink:0">H3 LABEL</span>
+      <span style="font-family:'Press Start 2P';font-size:8px;color:#fff">Score : 2 450 pts</span>
+    </div>
+    <div style="padding:12px 0;display:flex;gap:20px;align-items:center">
+      <span style="font-size:5px;color:var(--dim);width:70px;flex-shrink:0">BODY HUD</span>
+      <span style="font-family:'VT323';font-size:20px;color:var(--dim)">Chrono : 00:45 | Manche 3/5 | Leader : RAPTOR_X</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ 04 AVATARS ══════════════════ -->
+<section id="avatars">
+  <p class="sec-num">04 //</p>
+  <h2 class="sec-title">SYSTÈME <span>AVATARS</span></h2>
+
+  <div style="display:flex;gap:24px;align-items:flex-start;margin-bottom:28px;flex-wrap:wrap">
+    <!-- Avatar 1 -->
+    <div class="px-canvas">
+      <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+        <!-- hair -->
+        <rect x="3" y="0" width="10" height="3" fill="#1A1A1A"/>
+        <rect x="3" y="3" width="1" height="3" fill="#1A1A1A"/>
+        <rect x="12" y="3" width="1" height="3" fill="#1A1A1A"/>
+        <!-- head -->
+        <rect x="4" y="2" width="8" height="7" fill="#8B5E3C"/>
+        <!-- glasses -->
+        <rect x="4" y="4" width="4" height="3" fill="none" stroke="#FF6B00" stroke-width="0.4"/>
+        <rect x="8" y="4" width="4" height="3" fill="none" stroke="#FF6B00" stroke-width="0.4"/>
+        <rect x="8" y="5" width="1" height="1" fill="#FF6B00"/>
+        <!-- eyes -->
+        <rect x="5" y="5" width="2" height="1" fill="#FFD700"/>
+        <rect x="9" y="5" width="2" height="1" fill="#FFD700"/>
+        <!-- nose -->
+        <rect x="7" y="7" width="2" height="1" fill="#6B3A20"/>
+        <!-- mouth -->
+        <rect x="6" y="8" width="4" height="1" fill="#FF2D2D"/>
+        <!-- neck -->
+        <rect x="6" y="9" width="4" height="1" fill="#8B5E3C"/>
+        <!-- body -->
+        <rect x="2" y="10" width="12" height="5" fill="#FF2D2D"/>
+        <!-- collar -->
+        <rect x="6" y="10" width="4" height="2" fill="#1A1A1A"/>
+        <!-- chain -->
+        <rect x="6" y="12" width="1" height="1" fill="#FFD700"/>
+        <rect x="7" y="13" width="2" height="1" fill="#FFD700"/>
+        <rect x="9" y="12" width="1" height="1" fill="#FFD700"/>
+      </svg>
+    </div>
+    <!-- Avatar 2 -->
+    <div class="px-canvas" style="border-color:rgba(155,0,255,.5);background:rgba(155,0,255,.04)">
+      <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="0" width="12" height="4" fill="#FF6B00"/>
+        <rect x="4" y="2" width="8" height="8" fill="#C4834A"/>
+        <rect x="5" y="5" width="2" height="1" fill="#00A8FF"/>
+        <rect x="9" y="5" width="2" height="1" fill="#00A8FF"/>
+        <rect x="7" y="7" width="2" height="1" fill="#8B5030"/>
+        <rect x="6" y="8" width="4" height="1" fill="#FFD700"/>
+        <rect x="6" y="9" width="4" height="1" fill="#C4834A"/>
+        <rect x="2" y="10" width="12" height="5" fill="#9B00FF"/>
+        <rect x="6" y="10" width="4" height="2" fill="#1A1A1A"/>
+        <rect x="7" y="12" width="2" height="1" fill="#FF2D2D"/>
+      </svg>
+    </div>
+    <!-- Avatar 3 -->
+    <div class="px-canvas" style="border-color:rgba(0,168,255,.5);background:rgba(0,168,255,.03)">
+      <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="0" width="10" height="5" fill="#1A1A1A"/>
+        <rect x="4" y="2" width="8" height="7" fill="#5C3020"/>
+        <rect x="4" y="5" width="2" height="1" fill="#FF2D2D"/>
+        <rect x="10" y="5" width="2" height="1" fill="#FF2D2D"/>
+        <rect x="7" y="7" width="2" height="1" fill="#3A1E10"/>
+        <rect x="5" y="8" width="6" height="1" fill="#FF6B00"/>
+        <rect x="6" y="9" width="4" height="1" fill="#5C3020"/>
+        <rect x="2" y="10" width="12" height="5" fill="#1A1A1A"/>
+        <rect x="3" y="11" width="4" height="1" fill="#FF2D2D"/>
+        <rect x="9" y="11" width="4" height="1" fill="#00A8FF"/>
+        <rect x="7" y="12" width="2" height="1" fill="#FFD700"/>
+      </svg>
+    </div>
+
+    <div style="flex:1;min-width:220px">
+      <ul class="spec-list">
+        <li><strong>Format</strong> — 64 × 64 pixels</li>
+        <li><strong>Vue</strong> — Buste face (tête + épaules)</li>
+        <li><strong>Fond</strong> — Transparent (PNG)</li>
+        <li><strong>Style</strong> — Flat colors, zéro dégradé</li>
+        <li><strong>Ombrage</strong> — 2 à 3 valeurs max par teinte</li>
+        <li><strong>Anti-aliasing</strong> — Interdit</li>
+        <li><strong>Distinctifs</strong> — Lunettes, coiffure, accessoires forts</li>
+        <li><strong>Lisibilité</strong> — Prioritaire sur le détail</li>
+        <li><strong>Marge</strong> — Minimale autour du personnage</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="card-title">PIPELINE DE CRÉATION — 5 ÉTAPES</p>
+    <div class="pipeline">
+      <div class="pipe-step"><span class="pipe-num">01</span><span class="pipe-lbl">PHOTO<br>RÉFÉRENCE</span></div>
+      <div class="pipe-step"><span class="pipe-num">02</span><span class="pipe-lbl">GÉNÉRATION<br>PROMPT</span></div>
+      <div class="pipe-step"><span class="pipe-num">03</span><span class="pipe-lbl">PIXEL ART<br>RENDU</span></div>
+      <div class="pipe-step"><span class="pipe-num">04</span><span class="pipe-lbl">VÉRIF<br>CONFORMITÉ</span></div>
+      <div class="pipe-step"><span class="pipe-num">05</span><span class="pipe-lbl">INTÉGRA-<br>TION</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ 05 AURAS ══════════════════ -->
+<section id="auras">
+  <p class="sec-num">05 //</p>
+  <h2 class="sec-title">SYSTÈME <span>AURAS</span></h2>
+
+  <div class="hl">
+    ▶ Les auras se positionnent toujours derrière l'avatar — jamais devant.<br>
+    ▶ Elles ne masquent jamais la silhouette du joueur.<br>
+    ▶ Animation légère et continue possible — variations subtiles (frames multiples).<br>
+    ▶ Ne créent aucun avantage gameplay — rôle purement cosmétique.
+  </div>
+
+  <div class="g3" style="margin-top:20px">
+    <div class="env-card">
+      <div class="aura-wrap">
+        <div class="aura-fire"></div>
+        <div class="aura-avt">AVT</div>
+      </div>
+      <div class="env-body">
+        <p class="env-title">AURA FEU</p>
+        <p class="env-desc">Activée sur streak actif. Flammes rouge/orange derrière l'avatar. Animation continue de crépitement.</p>
+        <div class="tags">
+          <span class="tag tag-r">STREAK</span>
+          <span class="tag tag-o">FEU</span>
+        </div>
+      </div>
+    </div>
+    <div class="env-card">
+      <div class="aura-wrap">
+        <div class="aura-gold"></div>
+        <div class="aura-avt">AVT</div>
+      </div>
+      <div class="env-body">
+        <p class="env-title">AURA DORÉE</p>
+        <p class="env-desc">Réservée au leader du classement. Halo or brillant, pulsation lente et noble.</p>
+        <div class="tags">
+          <span class="tag tag-or">LEADER</span>
+          <span class="tag tag-or">GOLD</span>
+        </div>
+      </div>
+    </div>
+    <div class="env-card">
+      <div class="aura-wrap">
+        <div class="aura-elec"></div>
+        <div class="aura-avt">AVT</div>
+      </div>
+      <div class="env-body">
+        <p class="env-title">AURA ÉLECTRIQUE</p>
+        <p class="env-desc">Liée aux jokers et éliminations. Bleu électrique / violet, crépitements intenses.</p>
+        <div class="tags">
+          <span class="tag tag-b">JOKER</span>
+          <span class="tag tag-v">ÉLIM</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ 06 OVERLAYS ══════════════════ -->
+<section id="overlays">
+  <p class="sec-num">06 //</p>
+  <h2 class="sec-title">OVER<span>LAYS</span></h2>
+
+  <div class="g2">
+    <div class="card">
+      <p class="card-title">ÉLÉMENTS COSMÉTIQUES</p>
+      <ul class="spec-list">
+        <li><strong>Cadres</strong> — Encadrement pixel art stylisé autour du profil</li>
+        <li><strong>Badges</strong> — Symboles de rang, achievements, distinctions</li>
+        <li><strong>Effets de profil</strong> — Animations légères autour de l'avatar</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="card-title">CONTEXTES D'AFFICHAGE</p>
+      <ul class="spec-list">
+        <li><strong>Lobby</strong> — Affiché en attente de partie</li>
+        <li><strong>Leaderboard</strong> — Visible sur le classement</li>
+        <li><strong>Profil joueur</strong> — Personnalisation permanente</li>
+        <li><strong style="color:var(--rouge)">⚠ INTERDIT EN JEU</strong> — Ne doit jamais perturber la lisibilité</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:32px;justify-content:center;margin-top:28px;flex-wrap:wrap">
+    <div class="frame-wrap">
+      <div class="frame-box" style="border-color:var(--rouge);box-shadow:0 0 0 2px #000,0 0 0 4px var(--orange),0 0 12px var(--rouge)">
+        <div class="frame-inner"></div>
+      </div>
+      <p class="frame-lbl" style="color:var(--orange)">CADRE FEU</p>
+    </div>
+    <div class="frame-wrap">
+      <div class="frame-box" style="border-color:var(--or);box-shadow:0 0 0 2px #000,0 0 0 4px #7a6000,0 0 14px var(--or)">
+        <div class="frame-inner"></div>
+      </div>
+      <p class="frame-lbl" style="color:var(--or)">CADRE OR</p>
+    </div>
+    <div class="frame-wrap">
+      <div class="frame-box" style="border-color:var(--violet);box-shadow:0 0 0 2px #000,0 0 0 4px var(--bleu),0 0 12px var(--violet)">
+        <div class="frame-inner"></div>
+      </div>
+      <p class="frame-lbl" style="color:var(--violet)">CADRE ARCADE</p>
+    </div>
+    <div class="frame-wrap">
+      <div class="frame-box" style="border-color:var(--bleu);box-shadow:0 0 0 2px #000,0 0 0 4px var(--violet),0 0 12px var(--bleu)">
+        <div class="frame-inner"></div>
+      </div>
+      <p class="frame-lbl" style="color:var(--bleu)">CADRE TECH</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ 07 ENVIRONNEMENTS ══════════════════ -->
+<section id="envs">
+  <p class="sec-num">07 //</p>
+  <h2 class="sec-title">SALLES & <span>ENVIRONNEMENTS</span></h2>
+
+  <div class="g3">
+    <!-- SOLO -->
+    <div class="env-card">
+      <div class="env-prev" style="background:radial-gradient(ellipse at 50% 0%,rgba(255,107,0,.18) 0%,transparent 60%),#0D0A06">
+        <div style="position:absolute;inset:12px;border:1px solid rgba(255,107,0,.25);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
+          <div style="width:44px;height:3px;background:rgba(255,107,0,.5)"></div>
+          <div style="width:2px;height:22px;background:rgba(255,107,0,.6)"></div>
+          <div style="width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,107,0,.8);box-shadow:0 0 8px rgba(255,107,0,.4)"></div>
+        </div>
+        <span class="env-prev-label">// MODE SOLO</span>
+      </div>
+      <div class="env-body">
+        <p class="env-title">STUDIO RADIO</p>
+        <p class="env-desc">Cabine insonorisée, ambiance cypher rap, "Planet Rap". Panneaux acoustiques, micros, câbles, éclairage tamisé, néons discrets.</p>
+        <p class="env-desc" style="margin-top:6px">Vue légèrement extérieure · Console en bas · Avatar au centre</p>
+        <div class="tags">
+          <span class="tag tag-o">INTROSPECTIF</span>
+          <span class="tag tag-o">FOCUS</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MULTI -->
+    <div class="env-card">
+      <div class="env-prev" style="background:radial-gradient(ellipse at 50% 50%,rgba(255,45,45,.12) 0%,transparent 60%),#060010">
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;position:relative">
+          <div style="width:80px;height:80px;border-radius:50%;border:2px solid rgba(255,45,45,.4);display:flex;align-items:center;justify-content:center;position:relative">
+            <div style="width:28px;height:28px;border-radius:50%;background:rgba(255,45,45,.12);border:1px solid rgba(255,45,45,.3)"></div>
+            <div style="position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:12px;height:12px;background:rgba(255,107,0,.7)"></div>
+            <div style="position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);width:12px;height:12px;background:rgba(255,107,0,.7)"></div>
+            <div style="position:absolute;left:-7px;top:50%;transform:translateY(-50%);width:12px;height:12px;background:rgba(255,107,0,.7)"></div>
+            <div style="position:absolute;right:-7px;top:50%;transform:translateY(-50%);width:12px;height:12px;background:rgba(155,0,255,.7)"></div>
+          </div>
+        </div>
+        <span class="env-prev-label">// MODE MULTI</span>
+      </div>
+      <div class="env-body">
+        <p class="env-title">TABLE RONDE</p>
+        <p class="env-desc">Affrontement collectif autour d'un espace central. Table sombre (bois/béton), environnement urbain autour. Interface radio au centre.</p>
+        <p class="env-desc" style="margin-top:6px">Vue semi top-down · Disposition circulaire · Dernier artiste joué au centre</p>
+        <div class="tags">
+          <span class="tag tag-r">CONFRONTATION</span>
+          <span class="tag tag-v">TENSION</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARCADE -->
+    <div class="env-card">
+      <div class="env-prev" style="background:radial-gradient(ellipse at 30% 50%,rgba(255,45,45,.2) 0%,transparent 50%),radial-gradient(ellipse at 70% 50%,rgba(0,168,255,.2) 0%,transparent 50%),#000">
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px">
+          <div style="font-family:'Press Start 2P',monospace;font-size:9px;color:var(--rouge);text-shadow:0 0 10px var(--rouge),0 0 20px var(--rouge)" class="arcade-text-anim">ARCADE</div>
+          <div style="display:flex;gap:5px">
+            <div style="width:6px;height:22px;background:var(--bleu);box-shadow:0 0 8px var(--bleu);transform:skewX(-8deg)"></div>
+            <div style="width:6px;height:32px;background:var(--rouge);box-shadow:0 0 8px var(--rouge);transform:skewX(-8deg)"></div>
+            <div style="width:6px;height:22px;background:var(--violet);box-shadow:0 0 8px var(--violet);transform:skewX(-8deg)"></div>
+          </div>
+        </div>
+        <span class="env-prev-label">// MODE ARCADE</span>
+      </div>
+      <div class="env-body">
+        <p class="env-title">ARCADE — CHAOS TOTAL</p>
+        <p class="env-desc">Version amplifiée du multi. Effets plus marqués, couleurs plus saturées, ambiance plus chaotique. Éclairs, impulsions lumineuses liées aux jokers.</p>
+        <div class="tags">
+          <span class="tag tag-r">INTENSIF</span>
+          <span class="tag tag-b">ÉLECTRIQUE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ 08 UI ══════════════════ -->
+<section id="ui">
+  <p class="sec-num">08 //</p>
+  <h2 class="sec-title">INTERFACE <span>UI</span></h2>
+
+  <div class="g2">
+    <div class="card">
+      <p class="card-title" style="margin-bottom:18px">BOUTONS</p>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;gap:16px">
+          <button class="btn btn-p">JOUER</button>
+          <span style="font-size:5px;color:var(--dim)">Primaire — Action principale</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <button class="btn btn-s">PROFIL</button>
+          <span style="font-size:5px;color:var(--dim)">Secondaire — Action alternative</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <button class="btn btn-sp">JOKER !</button>
+          <span style="font-size:5px;color:var(--dim)">Spécial — Joker / Power-up</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <button class="btn btn-d">VERROUILLÉ</button>
+          <span style="font-size:5px;color:var(--dim)">Désactivé — Non disponible</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="card-title" style="margin-bottom:14px">HUD IN-GAME — MAQUETTE</p>
+      <div class="hud">
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px;border-bottom:1px solid #1a1a1a;padding-bottom:8px">
+          <span style="font-family:'Press Start 2P';font-size:6px;color:var(--rouge)">MANCHE 3/5</span>
+          <span style="font-family:'VT323';font-size:18px;color:var(--orange)">00:28</span>
+        </div>
+        <div style="font-size:6px;display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="color:#fff">RAPTOR_X</span>
+          <span style="color:var(--or)">2 450 ▲</span>
+        </div>
+        <div style="font-size:6px;display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="color:var(--dim)">GHOST_77</span>
+          <span style="color:var(--dim)">2 100</span>
+        </div>
+        <div style="font-size:6px;display:flex;justify-content:space-between;margin-bottom:10px">
+          <span style="color:var(--dim)">M_BLADE</span>
+          <span style="color:var(--dim)">1 890</span>
+        </div>
+        <div style="display:flex;gap:5px;justify-content:center;padding-top:8px;border-top:1px solid #1a1a1a">
+          <div style="background:var(--violet);padding:4px 8px;font-size:5px;color:#fff">×2</div>
+          <div style="background:#1a1a1a;padding:4px 8px;font-size:5px;color:#444">SKIP</div>
+          <div style="background:#1a1a1a;padding:4px 8px;font-size:5px;color:#444">BOMB</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+    <div style="padding:12px;background:var(--bg3);border-left:3px solid var(--rouge);font-size:5px;color:var(--dim);line-height:2">
+      Boutons pixel art — contours nets, shadow décalée 4px, pas d'ombres douces
+    </div>
+    <div style="padding:12px;background:var(--bg3);border-left:3px solid var(--orange);font-size:5px;color:var(--dim);line-height:2">
+      Transitions rapides — feedback immédiat, aucune latence perçue
+    </div>
+    <div style="padding:12px;background:var(--bg3);border-left:3px solid var(--violet);font-size:5px;color:var(--dim);line-height:2">
+      Lisibilité maximale — contraste élevé systématique sur fond sombre
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ 09 EFFETS ══════════════════ -->
+<section id="effets">
+  <p class="sec-num">09 //</p>
+  <h2 class="sec-title">EFFETS <span>VISUELS</span></h2>
+
+  <div class="g2">
+    <div>
+      <div class="eff-item">
+        <div class="eff-dot" style="background:#00FF88;box-shadow:0 0 8px #00FF88"></div>
+        <span class="eff-name">VALIDATION RÉPONSE</span>
+        <span class="eff-desc">Flash vert + particules montantes</span>
+      </div>
+      <div class="eff-item">
+        <div class="eff-dot" style="background:var(--rouge);box-shadow:0 0 8px var(--rouge)"></div>
+        <span class="eff-name">ERREUR / MAUVAISE RÉPONSE</span>
+        <span class="eff-desc">Flash rouge + tremblement UI</span>
+      </div>
+      <div class="eff-item">
+        <div class="eff-dot" style="background:var(--violet);box-shadow:0 0 8px var(--violet)"></div>
+        <span class="eff-name">ACTIVATION JOKER</span>
+        <span class="eff-desc">Éclair violet + onde de choc</span>
+      </div>
+      <div class="eff-item">
+        <div class="eff-dot" style="background:var(--or);box-shadow:0 0 8px var(--or)"></div>
+        <span class="eff-name">ÉLIMINATION / KILL</span>
+        <span class="eff-desc">Explosion or + texte BOOM</span>
+      </div>
+      <div class="eff-item">
+        <div class="eff-dot" style="background:var(--bleu);box-shadow:0 0 8px var(--bleu)"></div>
+        <span class="eff-name">CHANGEMENT DE TOUR</span>
+        <span class="eff-desc">Balayage horizontal bleu</span>
+      </div>
+      <div class="eff-item">
+        <div class="eff-dot" style="background:var(--orange);box-shadow:0 0 8px var(--orange)"></div>
+        <span class="eff-name">DOMINATION / STREAK</span>
+        <span class="eff-desc">Aura feu + texte ON FIRE !</span>
+      </div>
+    </div>
+    <div class="card">
+      <p class="card-title">CONTRAINTES EFFETS</p>
+      <ul class="spec-list">
+        <li>Style pixel art strict — pas de particules réalistes</li>
+        <li>Ne pas ralentir le jeu — optimisation prioritaire</li>
+        <li>Lisibilité permanente — jamais de surcharge visuelle</li>
+        <li>Palette validée — rouge / orange / violet / bleu / or</li>
+        <li>Durée courte — max 0,5s pour les effets d'action</li>
+        <li>Cohérence — même logique sur tous les modes</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ 10 RÈGLES ══════════════════ -->
+<section id="regles">
+  <p class="sec-num">10 //</p>
+  <h2 class="sec-title">RÈGLES & <span>INTERDICTIONS</span></h2>
+
+  <div class="g2">
+    <div class="rules-no">
+      <p class="rules-title r-no">⚠ ABSOLUMENT INTERDIT</p>
+      <div class="rule-item">Mélange de styles graphiques (pixel art + réalisme)</div>
+      <div class="rule-item">Anti-aliasing sur les pixels</div>
+      <div class="rule-item">Dégradés complexes sur les assets</div>
+      <div class="rule-item">Effets de glow non pixelisés</div>
+      <div class="rule-item">Textures photographiques</div>
+      <div class="rule-item">Rupture de cohérence visuelle</div>
+      <div class="rule-item">Palettes ternes ou dessaturées</div>
+      <div class="rule-item">Overlays actifs pendant le gameplay</div>
+      <div class="rule-item">Surcharge visuelle à l'écran</div>
+    </div>
+    <div class="rules-yes">
+      <p class="rules-title r-yes">✓ REQUIS & VALIDÉ</p>
+      <div class="ok-item">Pixels nets, arêtes franches sans exception</div>
+      <div class="ok-item">Couleurs plates (flat colors) sur tous les assets</div>
+      <div class="ok-item">Contraste élevé systématique</div>
+      <div class="ok-item">Ombrage minimal (2 à 3 valeurs max)</div>
+      <div class="ok-item">Silhouettes lisibles en petit format</div>
+      <div class="ok-item">Cohérence d'épaisseur de contour</div>
+      <div class="ok-item">Palette rouge / orange / violet / bleu</div>
+      <div class="ok-item">Lisibilité mobile en toutes conditions</div>
+      <div class="ok-item">Même densité de détails sur tous les assets</div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px;padding:28px;background:rgba(255,45,45,.05);border:2px solid rgba(255,45,45,.4);text-align:center">
+    <p style="font-size:8px;color:var(--rouge);text-shadow:0 0 12px var(--rouge);margin-bottom:14px">RÈGLE ABSOLUE</p>
+    <p style="font-size:6px;color:#fff;line-height:3">
+      100% du jeu est en pixel art — sans exception.<br>
+      Tout élément ajouté doit respecter le pixel art, la lisibilité,<br>
+      l'univers urbain / rap et la cohérence globale du projet.
+    </p>
+  </div>
+</section>
+
+<div class="grad-bar"></div>
+
+<!-- ══════════════════ FOOTER ══════════════════ -->
+<footer>
+  <p class="foot-title">ROLAND-GAMOS</p>
+  <p class="foot-text">
+    CHARTE GRAPHIQUE OFFICIELLE v1.0 · 2026<br>
+    PIXEL ART · URBAIN · RAP · COMPÉTITIF<br><br>
+    <span class="neon-r">ROUGE #FF2D2D</span> &nbsp;·&nbsp;
+    <span class="neon-o">ORANGE #FF6B00</span> &nbsp;·&nbsp;
+    <span class="neon-v">VIOLET #9B00FF</span> &nbsp;·&nbsp;
+    <span class="neon-b">BLEU #00A8FF</span>
+  </p>
+</footer>
+
+</body>
+</html>
