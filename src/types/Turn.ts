@@ -1,7 +1,7 @@
 /**
  * Source de validation
  */
-export type ValidationSource = 'musicbrainz' | 'wikidata_fallback';
+export type ValidationSource = 'musicbrainz' | 'wikidata_fallback' | 'local_store';
 
 /**
  * Raison d'invalidité

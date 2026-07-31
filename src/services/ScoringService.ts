@@ -1,7 +1,4 @@
 import { ScoringDetails } from '../types/SoloMove';
-import { pairStatsProvider } from './providers/PairStatsProvider';
-import { degreeProvider } from './providers/DegreeProvider';
-import { popularityCategoryProvider, PopularityCategory } from './providers/PopularityCategoryProvider';
 
 /**
  * Points de base pour chaque coup valide
@@ -9,54 +6,48 @@ import { popularityCategoryProvider, PopularityCategory } from './providers/Popu
 const BASE_POINTS = 100;
 
 /**
- * Plafond de score maximum par tour
+ * Plafond de score maximum par tour (au-delà = "Dépassement")
  */
-const SCORE_CAP = 280;
+const SCORE_CAP = 300;
+
+export type ArtistCategory = 'ultra_mainstream' | 'mainstream' | 'intermediate' | 'niche' | 'underground';
 
 /**
- * Service de calcul de score
- * Fonction pure, testable et réutilisable en Solo et Multi
+ * Entrées nécessaires au calcul du score d'un coup.
+ * Aucune dépendance MBID/DB — toutes les valeurs viennent de GameDataStore + du contexte de partie.
+ */
+export interface ScoreInput {
+  category: ArtistCategory;
+  collabDegree: number; // nombre de collaborateurs distincts de l'artiste proposé
+  pairFamilyCount: number; // nombre de familles de titres communes entre l'artiste précédent et le proposé
+  turnNumber: number; // longueur de la chaîne après ce coup (1-based)
+  fractionElapsed: number; // 0..1, fraction du temps de tour déjà écoulée
+}
+
+/**
+ * Service de calcul de score — fonction pure, testable et réutilisable
+ * (Solo Infini, Solo vs Bot, et potentiellement Multijoueur plus tard).
+ *
+ * Formule (CLAUDE_3.md §2.2) :
+ *   base = 100 + timeBonus + chainBonus
+ *   raw  = base × categoryMult × degreeMult × pairMult
+ *   finalScore = min(round(raw), 300)
+ *   overflow   = max(0, round(raw) - 300)
  */
 export class ScoringService {
-  /**
-   * Calcule le score d'un coup selon toutes les règles de bonus
-   * 
-   * @param previousArtistMbid MBID de l'artiste précédent
-   * @param currentArtistMbid MBID de l'artiste proposé
-   * @param turnNumber Numéro du tour (commence à 1)
-   * @param timeSpentSeconds Temps écoulé en secondes depuis le début du tour
-   * @returns Détails du scoring avec tous les bonus appliqués
-   */
-  calculateScore(
-    previousArtistMbid: string,
-    currentArtistMbid: string,
-    turnNumber: number,
-    timeSpentSeconds: number
-  ): ScoringDetails {
-    // 1. PAIR BONUS (fréquence du duo)
-    const pairFamilyCount = pairStatsProvider.getPairFamilyCount(
-      previousArtistMbid,
-      currentArtistMbid
-    );
-    const pairBonus = this.calculatePairBonus(pairFamilyCount);
+  calculateScore(input: ScoreInput): ScoringDetails {
+    const timeBonus = this.calculateTimeBonus(input.fractionElapsed);
+    const chainBonus = this.calculateChainBonus(input.turnNumber);
+    const base = BASE_POINTS + timeBonus + chainBonus;
 
-    // 2. DEGREE BONUS (soft)
-    const degree = degreeProvider.getDegree(currentArtistMbid);
-    const degreeBonus = this.calculateDegreeBonus(degree);
+    const categoryBonus = this.calculateCategoryMult(input.category);
+    const degreeBonus = this.calculateDegreeMult(input.collabDegree);
+    const pairBonus = this.calculatePairMult(input.pairFamilyCount);
 
-    // 3. CATEGORY BONUS (pré-calculé, stocké)
-    const category = popularityCategoryProvider.getCategory(currentArtistMbid, degree);
-    const categoryBonus = this.calculateCategoryBonus(category);
-
-    // 4. TIME BONUS
-    const timeBonus = this.calculateTimeBonus(timeSpentSeconds);
-
-    // 5. CHAIN BONUS
-    const chainBonus = this.calculateChainBonus(turnNumber);
-
-    // Calcul du score final avec plafond
-    const rawScore = BASE_POINTS * pairBonus * degreeBonus * categoryBonus * timeBonus * chainBonus;
-    const finalScore = Math.min(Math.round(rawScore), SCORE_CAP);
+    const raw = base * categoryBonus * degreeBonus * pairBonus;
+    const rounded = Math.round(raw);
+    const finalScore = Math.min(rounded, SCORE_CAP);
+    const overflow = Math.max(0, rounded - SCORE_CAP);
 
     return {
       basePoints: BASE_POINTS,
@@ -66,133 +57,91 @@ export class ScoringService {
       timeBonus,
       chainBonus,
       finalScore,
-      pairFamilyCount,
-      degree,
-      category,
-      timeSpent: timeSpentSeconds,
-      chainLength: turnNumber,
+      overflow,
+      pairFamilyCount: input.pairFamilyCount,
+      degree: input.collabDegree,
+      category: input.category,
+      timeSpent: input.fractionElapsed,
+      chainLength: input.turnNumber,
     };
   }
 
   /**
-   * Calcule le bonus de paire selon le nombre de familles communes
-   * 
-   * Règles :
-   * - 1 famille        → 1.30
-   * - 2–3 familles     → 1.18
-   * - 4–7 familles     → 1.08
-   * - 8–15 familles    → 1.03
-   * - >15 familles     → 1.00
+   * Bonus de temps additif selon la fraction du temps de tour écoulée.
+   * - <20%  → +50
+   * - <40%  → +35
+   * - <60%  → +20
+   * - <80%  → +10
+   * - sinon → +0
    */
-  private calculatePairBonus(pairFamilyCount: number): number {
-    if (pairFamilyCount === 0) {
-      return 1.00; // Pas de collaboration = pas de bonus
-    }
-    if (pairFamilyCount === 1) {
-      return 1.30;
-    }
-    if (pairFamilyCount >= 2 && pairFamilyCount <= 3) {
-      return 1.18;
-    }
-    if (pairFamilyCount >= 4 && pairFamilyCount <= 7) {
-      return 1.08;
-    }
-    if (pairFamilyCount >= 8 && pairFamilyCount <= 15) {
-      return 1.03;
-    }
-    // >15 familles
-    return 1.00;
+  private calculateTimeBonus(fractionElapsed: number): number {
+    if (fractionElapsed < 0.2) return 50;
+    if (fractionElapsed < 0.4) return 35;
+    if (fractionElapsed < 0.6) return 20;
+    if (fractionElapsed < 0.8) return 10;
+    return 0;
   }
 
   /**
-   * Calcule le bonus de degré selon la popularité de l'artiste
-   * 
-   * Règles :
-   * - 0–10   → 1.05
-   * - 11–25  → 1.03
-   * - 26–60  → 1.01
-   * - >60    → 1.00
+   * Bonus de chaîne additif selon la longueur de la chaîne.
+   * - ≥20 → +60
+   * - ≥15 → +40
+   * - ≥10 → +25
+   * - ≥5  → +10
+   * - <5  → +0
    */
-  private calculateDegreeBonus(degree: number): number {
-    if (degree >= 0 && degree <= 10) {
-      return 1.05;
-    }
-    if (degree >= 11 && degree <= 25) {
-      return 1.03;
-    }
-    if (degree >= 26 && degree <= 60) {
-      return 1.01;
-    }
-    // >60
-    return 1.00;
+  private calculateChainBonus(turnNumber: number): number {
+    if (turnNumber >= 20) return 60;
+    if (turnNumber >= 15) return 40;
+    if (turnNumber >= 10) return 25;
+    if (turnNumber >= 5) return 10;
+    return 0;
   }
 
   /**
-   * Calcule le bonus de catégorie selon la popularité
-   * 
-   * Règles :
-   * - Ultra mainstream → 1.00
-   * - Mainstream       → 1.02
-   * - Connu            → 1.04
-   * - Niche            → 1.08
-   * - Underground      → 1.12
+   * Multiplicateur de catégorie — pick obscur = bonus élevé (sens corrigé, CLAUDE_3.md §1).
    */
-  private calculateCategoryBonus(category: PopularityCategory): number {
-    const bonuses: Record<PopularityCategory, number> = {
-      ultra_mainstream: 1.00,
-      mainstream: 1.02,
-      connu: 1.04,
-      niche: 1.08,
+  private calculateCategoryMult(category: ArtistCategory): number {
+    const bonuses: Record<ArtistCategory, number> = {
       underground: 1.12,
+      niche: 1.08,
+      intermediate: 1.04,
+      mainstream: 1.02,
+      ultra_mainstream: 1.00,
     };
     return bonuses[category];
   }
 
   /**
-   * Calcule le bonus de temps selon la rapidité de réponse
-   * 
-   * Règles :
-   * - ≤5s      → 1.20
-   * - 6–10s    → 1.12
-   * - 11–20s   → 1.06
-   * - 21–35s   → 1.02
-   * - >35s     → 1.00
+   * Multiplicateur de degré (nombre de collaborateurs distincts).
+   * - 0–10   → 1.05
+   * - 11–25  → 1.03
+   * - 26–60  → 1.01
+   * - >60    → 1.00
    */
-  private calculateTimeBonus(timeSpentSeconds: number): number {
-    if (timeSpentSeconds <= 5) {
-      return 1.20;
-    }
-    if (timeSpentSeconds >= 6 && timeSpentSeconds <= 10) {
-      return 1.12;
-    }
-    if (timeSpentSeconds >= 11 && timeSpentSeconds <= 20) {
-      return 1.06;
-    }
-    if (timeSpentSeconds >= 21 && timeSpentSeconds <= 35) {
-      return 1.02;
-    }
-    // >35s
+  private calculateDegreeMult(collabDegree: number): number {
+    if (collabDegree <= 10) return 1.05;
+    if (collabDegree <= 25) return 1.03;
+    if (collabDegree <= 60) return 1.01;
     return 1.00;
   }
 
   /**
-   * Calcule le bonus de chaîne selon la longueur de la run
-   * 
-   * Formule :
-   * palier = floor((tour - 1) / 5)
-   * ChainBonus = 1 + min(0.20, 0.05 × palier)
-   * 
-   * Exemples :
-   * - Tour 1-5:   palier 0 → 1.00
-   * - Tour 6-10:  palier 1 → 1.05
-   * - Tour 11-15: palier 2 → 1.10
-   * - Tour 16-20: palier 3 → 1.15
-   * - Tour 21+:   palier 4+ → 1.20 (plafond)
+   * Multiplicateur de paire (familles de titres communes entre les deux artistes).
+   * - 0       → 1.00 (pas de collaboration = pas de bonus)
+   * - 1       → 1.30
+   * - 2–3     → 1.18
+   * - 4–7     → 1.08
+   * - 8–15    → 1.03
+   * - >15     → 1.00
    */
-  private calculateChainBonus(turnNumber: number): number {
-    const palier = Math.floor((turnNumber - 1) / 5);
-    const bonus = Math.min(0.20, 0.05 * palier);
-    return 1 + bonus;
+  private calculatePairMult(pairFamilyCount: number): number {
+    if (pairFamilyCount === 0) return 1.00;
+    if (pairFamilyCount === 1) return 1.30;
+    if (pairFamilyCount <= 3) return 1.18;
+    if (pairFamilyCount <= 7) return 1.08;
+    if (pairFamilyCount <= 15) return 1.03;
+    return 1.00;
   }
 }
 

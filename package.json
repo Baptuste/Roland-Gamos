@@ -14,11 +14,8 @@
     "seed": "ts-node src/scripts/etl.ts --seed",
     "etl": "ts-node src/scripts/etl.ts",
     "db:push": "ts-node src/scripts/push-to-supabase.ts",
-    "test": "jest",
-    "popularity:ingest": "ts-node src/jobs/popularity/scripts/runIngestJob.ts",
-    "popularity:score": "ts-node src/jobs/popularity/scripts/runScoreJob.ts",
-    "popularity:quantiles": "ts-node src/jobs/popularity/scripts/runQuantilesJob.ts",
-    "popularity:all": "npm run popularity:ingest && npm run popularity:score && npm run popularity:quantiles"
+    "metrics:compute": "ts-node src/scripts/computeArtistMetrics.ts",
+    "test": "jest"
   },
   "keywords": [
     "game",
@@ -39,10 +36,11 @@
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/jest": "^29.5.0",
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.10.0",
     "concurrently": "^8.2.2",
     "jest": "^29.7.0",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.0",
     "typescript": "^5.3.0"
   }

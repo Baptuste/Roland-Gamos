@@ -2,10 +2,9 @@ import { SoloRun, SoloRunStatus, createSoloRun } from '../types/SoloRun';
 import { SoloMove, createSoloMove } from '../types/SoloMove';
 import { CanonicalArtist } from '../types/Game';
 import { gameDataStore } from '../services/GameDataStore';
+import { scoringService, ArtistCategory } from '../services/ScoringService';
 
 const TURN_DURATION_MS = 30000;
-const BASE_POINTS = 100;
-const SCORE_CAP = 280;
 
 export interface SoloMoveResult {
   isValid: boolean;
@@ -130,31 +129,16 @@ export class SoloManager {
         });
       }
 
-      // --- Coup valide : calcul du score ---
+      // --- Coup valide : calcul du score (formule unifiée ScoringService) ---
       const collab = prevGameId ? gameDataStore.getCollaboration(prevGameId, resolvedProposed.id) : null;
-      const pairBonus = collab?.pair_bonus ?? 0;
-      const categoryBonus = resolvedProposed.category_bonus ?? 0;
-      const degreeBonus = resolvedProposed.degree_bonus ?? 0;
-      const timeBonus = this.calculateTimeBonus(timeSpentSeconds);
-      const chainBonus = this.calculateChainBonus(run.currentTurn);
 
-      const rawScore = BASE_POINTS + categoryBonus + degreeBonus + pairBonus + timeBonus + chainBonus;
-      const finalScore = Math.min(Math.round(rawScore), SCORE_CAP);
-
-      const scoring = {
-        basePoints: BASE_POINTS,
-        pairBonus,
-        degreeBonus,
-        categoryBonus,
-        timeBonus,
-        chainBonus,
-        finalScore,
-        pairFamilyCount: collab?.song_count ?? 0,
-        degree: resolvedProposed.degree_bonus ?? 0,
-        category: (resolvedProposed.category as any) ?? 'underground',
-        timeSpent: timeSpentSeconds,
-        chainLength: run.currentTurn,
-      };
+      const scoring = scoringService.calculateScore({
+        category: (resolvedProposed.category as ArtistCategory) ?? 'underground',
+        collabDegree: resolvedProposed.collab_degree ?? 0,
+        pairFamilyCount: collab?.pair_family_count ?? 0,
+        turnNumber: run.currentTurn,
+        fractionElapsed: timeSpentSeconds / (TURN_DURATION_MS / 1000),
+      });
 
       const validMove = createSoloMove(run.currentTurn, canonical, previousArtist, true, 'local_store', undefined, scoring);
 
@@ -163,7 +147,9 @@ export class SoloManager {
         currentArtist: canonical,
         usedArtists: [...run.usedArtists, canonicalKey],
         moves: [...run.moves, validMove],
-        totalScore: run.totalScore + finalScore,
+        totalScore: run.totalScore + scoring.finalScore,
+        overflowCount: run.overflowCount + (scoring.overflow > 0 ? 1 : 0),
+        overflowXpBonus: run.overflowXpBonus + scoring.overflow,
         currentTurn: run.currentTurn + 1,
         currentTurnEndsAt: Date.now() + TURN_DURATION_MS,
       };
@@ -172,7 +158,7 @@ export class SoloManager {
       this.scheduleTurnTimer(runId, updatedRun);
       this.runLocks.delete(runId);
 
-      return { isValid: true, move: validMove, run: updatedRun, message: `Coup valide ! +${finalScore} points` };
+      return { isValid: true, move: validMove, run: updatedRun, message: `Coup valide ! +${scoring.finalScore} points` };
 
     } catch (error) {
       this.runLocks.delete(runId);
@@ -245,25 +231,6 @@ export class SoloManager {
 
   private isTurnExpired(run: SoloRun): boolean {
     return !!run.currentTurnEndsAt && Date.now() >= run.currentTurnEndsAt;
-  }
-
-  // TimeBonus : basé sur % du timer écoulé (timer = 30s)
-  private calculateTimeBonus(seconds: number): number {
-    const pct = seconds / 30;
-    if (pct < 0.20) return 50;
-    if (pct < 0.40) return 35;
-    if (pct < 0.60) return 20;
-    if (pct < 0.80) return 10;
-    return 0;
-  }
-
-  // ChainBonus : bonus additif selon longueur de chaîne
-  private calculateChainBonus(chainLength: number): number {
-    if (chainLength >= 20) return 60;
-    if (chainLength >= 15) return 40;
-    if (chainLength >= 10) return 25;
-    if (chainLength >= 5)  return 10;
-    return 0;
   }
 }
 

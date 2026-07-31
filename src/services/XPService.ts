@@ -62,8 +62,9 @@ export interface XPResult {
   prestige: string;
 }
 
-export async function addXP(playerId: string, score: number): Promise<XPResult> {
-  const xpGained = Math.min(Math.floor(score / 10), XP_CAP_PER_GAME);
+export async function addXP(playerId: string, score: number, bonusXP: number = 0): Promise<XPResult> {
+  // bonusXP (ex: récompense de "Dépassement") s'ajoute au-delà du cap par partie — CLAUDE_3.md §2.3
+  const xpGained = Math.min(Math.floor(score / 10), XP_CAP_PER_GAME) + Math.max(0, bonusXP);
 
   if (!supabase) {
     // Pas de Supabase : retourner un résultat vide

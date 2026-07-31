@@ -2,6 +2,7 @@ import { CanonicalArtist } from '../types/Game';
 import { SoloMove, createSoloMove } from '../types/SoloMove';
 import { SoloRunStatus } from '../types/SoloRun';
 import { gameDataStore } from '../services/GameDataStore';
+import { scoringService, ArtistCategory } from '../services/ScoringService';
 
 const TURN_DURATION_MS = 30000;
 const BOT_DIFFICULTY_THRESHOLDS = [5, 7, 10];
@@ -36,6 +37,8 @@ export interface BotGameRun {
   currentTurnEndsAt?: number;
   playerScore: number;
   botScore: number;
+  overflowCount: number;
+  overflowXpBonus: number;
   startedAt: number;
   endedAt?: number;
   winner?: 'player' | 'bot';
@@ -71,6 +74,8 @@ export class BotManager {
       currentTurnEndsAt: Date.now() + TURN_DURATION_MS,
       playerScore: 0,
       botScore: 0,
+      overflowCount: 0,
+      overflowXpBonus: 0,
       startedAt: Date.now(),
       isPlayerTurn: true,
     };
@@ -224,7 +229,14 @@ export class BotManager {
       }
 
       // Coup valide du joueur
-      const playerScoring = this.calculateScore(timeSpentSeconds, run.currentTurn);
+      const playerCollab = gameDataStore.getCollaboration(prevId, resolved.id);
+      const playerScoring = scoringService.calculateScore({
+        category: (resolved.category as ArtistCategory) ?? 'underground',
+        collabDegree: resolved.collab_degree ?? 0,
+        pairFamilyCount: playerCollab?.pair_family_count ?? 0,
+        turnNumber: run.currentTurn,
+        fractionElapsed: timeSpentSeconds / (TURN_DURATION_MS / 1000),
+      });
       const playerMove = createSoloMove(
         run.currentTurn, canonicalArtist, previousArtist, true, 'local_store', undefined, playerScoring
       );
@@ -235,6 +247,8 @@ export class BotManager {
         usedArtists: [...run.usedArtists, String(resolved.id)],
         playerMoves: [...run.playerMoves, playerMove],
         playerScore: run.playerScore + playerScoring.finalScore,
+        overflowCount: run.overflowCount + (playerScoring.overflow > 0 ? 1 : 0),
+        overflowXpBonus: run.overflowXpBonus + playerScoring.overflow,
         currentTurn: run.currentTurn + 1,
         isPlayerTurn: false,
       };
@@ -263,7 +277,16 @@ export class BotManager {
       }
 
       // Le bot joue
-      const botScoring = this.calculateScore(Math.floor(Math.random() * 15) + 3, updatedRun.currentTurn);
+      const botPrevId = canonicalArtist.gameId!;
+      const botCollab = gameDataStore.getCollaboration(botPrevId, botChoice.gameId!);
+      const botArtist = gameDataStore.getArtistById(botChoice.gameId!);
+      const botScoring = scoringService.calculateScore({
+        category: (botArtist?.category as ArtistCategory) ?? 'underground',
+        collabDegree: botArtist?.collab_degree ?? 0,
+        pairFamilyCount: botCollab?.pair_family_count ?? 0,
+        turnNumber: updatedRun.currentTurn,
+        fractionElapsed: (Math.floor(Math.random() * 15) + 3) / (TURN_DURATION_MS / 1000),
+      });
       const botMove = createSoloMove(
         updatedRun.currentTurn, botChoice,
         updatedRun.currentArtist || updatedRun.seedArtist,
@@ -312,30 +335,6 @@ export class BotManager {
         winner: 'player',
       };
     }
-  }
-
-  private calculateScore(timeSpentSeconds: number, currentTurn: number): {
-    basePoints: number; pairBonus: number; degreeBonus: number;
-    categoryBonus: number; timeBonus: number; chainBonus: number;
-    finalScore: number; pairFamilyCount: number; degree: number;
-    category: 'ultra_mainstream' | 'mainstream' | 'connu' | 'niche' | 'underground';
-    timeSpent: number; chainLength: number;
-  } {
-    const timeBonus = timeSpentSeconds <= 5 ? 20 :
-                      timeSpentSeconds <= 10 ? 12 :
-                      timeSpentSeconds <= 20 ? 6 : 0;
-
-    const palier = Math.floor((currentTurn - 1) / 5);
-    const chainBonus = Math.min(20, 5 * palier);
-
-    const finalScore = Math.min(100 + timeBonus + chainBonus, 280);
-
-    return {
-      basePoints: 100, pairBonus: 0, degreeBonus: 0, categoryBonus: 0,
-      timeBonus, chainBonus, finalScore,
-      pairFamilyCount: 0, degree: 0, category: 'underground' as const,
-      timeSpent: timeSpentSeconds, chainLength: currentTurn,
-    };
   }
 
   private endGame(run: BotGameRun, winner: 'player' | 'bot', reason: string): BotGameRun {

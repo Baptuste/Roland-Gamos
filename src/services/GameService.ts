@@ -1,9 +1,7 @@
 import { Game, GameStatus, createGame, CanonicalArtist } from '../types/Game';
 import { Player } from '../types/Player';
 import { Turn, createTurn, InvalidReason } from '../types/Turn';
-import { ValidationService, ValidationResult } from './ValidationService';
-import { MusicBrainzService } from './MusicBrainzService';
-import { WikidataService } from './WikidataService';
+import { gameDataStore } from './GameDataStore';
 
 /**
  * Durée d'un tour en millisecondes (30 secondes)
@@ -14,6 +12,18 @@ const TURN_DURATION_MS = 30000;
  * Nombre maximum de tentatives par tour
  */
 const MAX_ATTEMPTS_PER_TURN = 2;
+
+/**
+ * Résultat d'une validation locale d'un coup (remplace l'ancien ValidationResult
+ * base sur ValidationService/MusicBrainz — meme forme, source RAM-only).
+ */
+interface LocalValidationResult {
+  exists: boolean;
+  validRelation: boolean;
+  source?: 'local_store';
+  canonical: CanonicalArtist;
+  flags?: { singleCircularCollab?: boolean };
+}
 
 /**
  * Résultat d'une proposition d'artiste
@@ -28,18 +38,57 @@ export interface ProposalResult {
 /**
  * Service principal pour gérer les parties
  * Applique les règles : timer (30s), attempts (max 2), repeat (hard fail), single-circular (invalid + retry)
+ *
+ * Validation 100% RAM via GameDataStore — aucun appel réseau pendant une partie
+ * (meme regle absolue que Solo Infini / Solo vs Bot, voir CLAUDE_3.md §2.1).
  */
 export class GameService {
-  private validationService: ValidationService;
   private onTurnTimeout?: (gameId: string) => void;
 
-  constructor(
-    musicBrainzService?: MusicBrainzService,
-    wikidataService?: WikidataService,
-    onTurnTimeout?: (gameId: string) => void
-  ) {
-    this.validationService = new ValidationService(musicBrainzService, wikidataService);
+  constructor(onTurnTimeout?: (gameId: string) => void) {
     this.onTurnTimeout = onTurnTimeout;
+  }
+
+  /**
+   * Valide un coup localement via GameDataStore (zéro appel réseau).
+   * Reproduit le contrat de l'ancien ValidationService.validateMove :
+   * existence de l'artiste, relation de collaboration, flag single-circular.
+   */
+  private validateMoveLocally(
+    previousArtist: CanonicalArtist | null,
+    proposedArtistName: string
+  ): LocalValidationResult {
+    const resolved = gameDataStore.resolveArtist(proposedArtistName);
+    if (!resolved) {
+      return { exists: false, validRelation: false, canonical: { name: proposedArtistName } };
+    }
+
+    const canonical: CanonicalArtist = { name: resolved.name, gameId: resolved.id };
+
+    // Premier tour de la partie : pas d'artiste précédent, existence suffit
+    if (!previousArtist) {
+      return { exists: true, validRelation: true, source: 'local_store', canonical };
+    }
+
+    const prevId = previousArtist.gameId ?? gameDataStore.resolveArtist(previousArtist.name)?.id;
+    if (!prevId) {
+      return { exists: true, validRelation: false, source: 'local_store', canonical };
+    }
+
+    const validRelation = gameDataStore.haveCollaborated(prevId, resolved.id);
+
+    // Règle single-circular : l'artiste proposé n'a qu'un seul collaborateur connu,
+    // et c'est justement l'artiste précédent (pas assez de profondeur pour continuer la chaîne)
+    const collaborators = gameDataStore.getCollaborators(resolved.id);
+    const singleCircularCollab = collaborators.length === 1 && collaborators[0] === prevId;
+
+    return {
+      exists: true,
+      validRelation,
+      source: 'local_store',
+      canonical,
+      flags: { singleCircularCollab },
+    };
   }
 
   /**
@@ -109,7 +158,7 @@ export class GameService {
    * Obtient l'identifiant canonique pour le stockage (MBID prioritaire, sinon nom)
    */
   private getCanonicalId(canonical: CanonicalArtist): string {
-    return canonical.mbid || canonical.name.toLowerCase().trim();
+    return canonical.gameId !== undefined ? String(canonical.gameId) : canonical.name.toLowerCase().trim();
   }
 
   /**
@@ -198,9 +247,9 @@ export class GameService {
     // 6) Normaliser le nom de l'artiste
     const normalizedArtistName = artistName.trim();
 
-    // 7) Valider le mouvement via ValidationService
+    // 7) Valider le mouvement localement via GameDataStore (zéro appel réseau)
     const previousArtist = game.lastArtist || (game.lastArtistName ? { name: game.lastArtistName } : null);
-    const validation = await this.validationService.validateMove(previousArtist, normalizedArtistName);
+    const validation = this.validateMoveLocally(previousArtist, normalizedArtistName);
 
     // 8) Règle REPEAT (HARD FAIL - élimination immédiate, pas de retry)
     if (validation.exists) {
@@ -338,7 +387,7 @@ export class GameService {
       isValid: true,
       turn: createTurn(playerId, normalizedArtistName, true, attemptsUsed, validation.source),
       game: finalGame,
-      message: `Collaboration validée entre "${previousArtist?.name || 'début'}" et "${validation.canonical.name}" (${validation.source || 'musicbrainz'}).`,
+      message: `Collaboration validée entre "${previousArtist?.name || 'début'}" et "${validation.canonical.name}" (${validation.source || 'local_store'}).`,
     };
   }
 

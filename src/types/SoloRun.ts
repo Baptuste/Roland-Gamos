@@ -23,6 +23,8 @@ export interface SoloRun {
   currentTurn: number; // Numéro du tour actuel (commence à 1)
   currentTurnEndsAt?: number; // Timestamp (epoch ms) de fin du tour actuel
   totalScore: number; // Score total accumulé
+  overflowCount: number; // Nombre de coups ayant dépassé le plafond de score
+  overflowXpBonus: number; // Somme des montants de dépassement (XP bonus non cappé)
   startedAt: number; // Timestamp de début de la run
   endedAt?: number; // Timestamp de fin de la run
   endReason?: 'INVALID_FEAT' | 'REPEAT' | 'TIMEOUT' | 'OTHER'; // Raison de fin
@@ -46,6 +48,8 @@ export function createSoloRun(
     moves: [],
     currentTurn: 1,
     totalScore: 0,
+    overflowCount: 0,
+    overflowXpBonus: 0,
     startedAt: Date.now(),
   };
 }

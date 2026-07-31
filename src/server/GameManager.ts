@@ -1,3 +1,4 @@
+import { Server } from 'socket.io';
 import { Game, GameStatus, createGame } from '../types/Game';
 import { Player, createPlayer } from '../types/Player';
 import { GameService } from '../services/GameService';
@@ -17,6 +18,15 @@ export class GameManager {
   private gameCodes: Map<string, string> = new Map(); // gameCode -> gameId
   private usedCodes: Set<string> = new Set(); // Codes déjà utilisés
   private gameTimers: Map<string, NodeJS.Timeout> = new Map(); // gameId -> timeout handle
+  private proposalLocks: Map<string, boolean> = new Map(); // gameId -> anti double-soumission
+  private io: Server | null = null; // Instance Socket.IO pour les notifications
+
+  /**
+   * Définit l'instance Socket.IO pour les notifications
+   */
+  setSocketIO(io: Server): void {
+    this.io = io;
+  }
 
   /**
    * Génère un code de partie unique à 6 chiffres
@@ -60,8 +70,6 @@ export class GameManager {
       attemptsUsed: 0,
     };
     const gameService = new GameService(
-      undefined,
-      undefined,
       (gameId: string) => this.handleTurnTimeout(gameId)
     );
 
@@ -275,6 +283,20 @@ export class GameManager {
 
     this.games.set(gameId, finalGame);
 
+    // Notifier tous les clients de la mise à jour de la partie
+    if (this.io) {
+      const message = finalGame.status === GameStatus.FINISHED
+        ? `Le temps est écoulé. ${currentPlayer.name} est éliminé. La partie est terminée.`
+        : `Le temps est écoulé. ${currentPlayer.name} est éliminé.`;
+
+      this.io.to(gameId).emit('game-updated', {
+        game: finalGame,
+        turn: turn,
+        message: message,
+        isValid: false,
+      });
+    }
+
     // Programmer le timer pour le nouveau tour si la partie continue
     if (finalGame.status === GameStatus.IN_PROGRESS) {
       this.scheduleTurnTimer(gameId, finalGame);
@@ -309,12 +331,22 @@ export class GameManager {
       return null;
     }
 
-    const result = await gameService.proposeArtist(game, playerId, artistName);
-    
-    // Mettre à jour la partie
-    this.games.set(gameId, result.game);
+    // Anti double-soumission : un seul coup traité a la fois pour cette partie
+    if (this.proposalLocks.get(gameId)) {
+      return null;
+    }
+    this.proposalLocks.set(gameId, true);
 
-    return result;
+    try {
+      const result = await gameService.proposeArtist(game, playerId, artistName);
+
+      // Mettre à jour la partie
+      this.games.set(gameId, result.game);
+
+      return result;
+    } finally {
+      this.proposalLocks.delete(gameId);
+    }
   }
 
   /**

@@ -5,15 +5,16 @@ import { CanonicalArtist } from './Game';
  */
 export interface ScoringDetails {
   basePoints: number;
-  pairBonus: number;
-  degreeBonus: number;
-  categoryBonus: number;
-  timeBonus: number;
-  chainBonus: number;
-  finalScore: number; // Score après application du plafond
+  pairBonus: number; // multiplicateur pairMult
+  degreeBonus: number; // multiplicateur degreeMult
+  categoryBonus: number; // multiplicateur categoryMult
+  timeBonus: number; // bonus additif (points)
+  chainBonus: number; // bonus additif (points)
+  finalScore: number; // Score après application du plafond (300)
+  overflow: number; // Montant au-dessus du plafond (0 si pas de dépassement)
   pairFamilyCount: number; // Nombre de familles communes entre A et B
-  degree: number; // Degré de popularité de l'artiste proposé
-  category: 'ultra_mainstream' | 'mainstream' | 'connu' | 'niche' | 'underground';
+  degree: number; // collab_degree de l'artiste proposé
+  category: 'ultra_mainstream' | 'mainstream' | 'intermediate' | 'niche' | 'underground';
   timeSpent: number; // Temps en secondes
   chainLength: number; // Longueur de la chaîne (tour actuel)
 }

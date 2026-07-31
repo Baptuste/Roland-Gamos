@@ -47,6 +47,7 @@ app.use(cors());
 app.use(express.json());
 
 const gameManager = new GameManager();
+gameManager.setSocketIO(io);
 
 // API REST pour obtenir des informations sur une partie
 app.get('/api/game/:gameId', (req: express.Request, res: express.Response) => {
@@ -472,6 +473,8 @@ async function handleGameFinish(params: {
   mode: 'Solo Infini' | 'Solo Bot' | 'Multijoueur';
   botWin?: boolean;
   multiWin?: boolean;
+  overflowCount?: number;
+  overflowXpBonus?: number;
 }): Promise<{
   leaderboard: { rank: number; score: number } | null;
   xp: { gained: number; total: number; level: number; leveledUp: boolean; prestige: string } | null;
@@ -521,10 +524,12 @@ async function handleGameFinish(params: {
       best_solo_score: 0, best_solo_turns: 0, best_bot_score: 0,
       total_score: 0, bot_wins: 0, bot_losses: 0,
       xp: 0, multiplayer_wins: 0, multiplayer_losses: 0, best_multiplayer_score: 0,
+      overflow_count: 0,
     };
 
     s.total_games = (s.total_games || 0) + 1;
     s.total_score = (s.total_score || 0) + params.score;
+    s.overflow_count = (s.overflow_count || 0) + (params.overflowCount || 0);
 
     if (params.mode === 'Solo Infini') {
       s.total_solo_games = (s.total_solo_games || 0) + 1;
@@ -547,13 +552,13 @@ async function handleGameFinish(params: {
       .upsert({ ...s, player_name: params.playerName }, { onConflict: 'player_name' });
   } catch { /* stats non critique */ }
 
-  // 3. XP
-  const xpResult = await addXP(params.playerId, params.score);
+  // 3. XP (+ bonus XP non cappé si dépassement du plafond de score — CLAUDE_3.md §2.3)
+  const xpResult = await addXP(params.playerId, params.score, params.overflowXpBonus || 0);
 
   // 4. Unlocks
   const { data: statsRow } = await supabase
     .from('player_stats')
-    .select('multiplayer_wins, bot_wins, best_solo_score')
+    .select('multiplayer_wins, bot_wins, best_solo_score, overflow_count')
     .eq('player_name', params.playerName)
     .single();
 
@@ -565,11 +570,12 @@ async function handleGameFinish(params: {
   // 5. Incrémenter total_score dans players
   const { data: pRow } = await supabase.from('players').select('total_score').eq('id', params.playerId).single();
   if (pRow) {
-    await supabase.from('players')
-      .update({ total_score: (pRow.total_score || 0) + params.score })
-      .eq('id', params.playerId)
-      .catch(() => {});
-  };
+    try {
+      await supabase.from('players')
+        .update({ total_score: (pRow.total_score || 0) + params.score })
+        .eq('id', params.playerId);
+    } catch { /* non critique */ }
+  }
 
   return {
     leaderboard: { rank, score: params.score },
@@ -601,6 +607,8 @@ app.post('/api/solo/infinite/finish', async (req: express.Request, res: express.
       score: run.totalScore,
       turns: run.currentTurn - 1,
       mode: 'Solo Infini',
+      overflowCount: run.overflowCount,
+      overflowXpBonus: run.overflowXpBonus,
     });
 
     res.json(result);
@@ -628,6 +636,8 @@ app.post('/api/solo/bot/finish', async (req: express.Request, res: express.Respo
       turns: run.playerMoves.length,
       mode: 'Solo Bot',
       botWin: !playerWon,
+      overflowCount: run.overflowCount,
+      overflowXpBonus: run.overflowXpBonus,
     });
 
     res.json(result);

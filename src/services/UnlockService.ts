@@ -11,7 +11,7 @@ export interface CosmeticItem {
 
 interface UnlockCondition {
   level?: number;
-  type?: 'multiplayer_wins' | 'bot_wins' | 'solo_score' | 'chain_length';
+  type?: 'multiplayer_wins' | 'bot_wins' | 'solo_score' | 'chain_length' | 'overflow_count';
   value?: number;
 }
 
@@ -19,6 +19,7 @@ interface PlayerStats {
   multiplayer_wins?: number;
   bot_wins?: number;
   best_solo_score?: number;
+  overflow_count?: number;
 }
 
 // ─────────────────────────────────────────────
@@ -67,6 +68,9 @@ export async function checkUnlocks(
         case 'solo_score':
           satisfied = (stats.best_solo_score || 0) >= (cond.value || 0);
           break;
+        case 'overflow_count':
+          satisfied = (stats.overflow_count || 0) >= (cond.value || 0);
+          break;
       }
     }
 
@@ -93,9 +97,10 @@ export async function triggerUnlock(playerId: string, cosmeticId: string): Promi
   if (!supabase) return;
   await supabase
     .from('cosmetics_unlocked')
-    .insert({ player_id: playerId, cosmetic_id: cosmeticId })
-    .onConflict('player_id,cosmetic_id')
-    .ignore();
+    .upsert(
+      { player_id: playerId, cosmetic_id: cosmeticId },
+      { onConflict: 'player_id,cosmetic_id', ignoreDuplicates: true }
+    );
 }
 
 // ─────────────────────────────────────────────

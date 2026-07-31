@@ -14,6 +14,7 @@ export interface GameArtist {
   category: string;
   category_bonus: number;
   degree_bonus: number;
+  collab_degree: number; // nombre de collaborateurs distincts (offline job computeArtistMetrics)
 }
 
 /**
@@ -25,6 +26,7 @@ export interface GameCollaboration {
   song_count: number;
   pair_bonus: number;
   confidence: number;
+  pair_family_count: number; // familles de titres distinctes (offline job computeArtistMetrics)
 }
 
 /**
@@ -68,7 +70,7 @@ export class GameDataStore {
     // Note: artists.id est UUID dans Supabase — on utilise genius_id comme clé interne integer
     const { data: dbArtists, error: artistError } = await supabase!
       .from('artists')
-      .select('id, genius_id, name, image_url, category, category_bonus, degree_bonus, status')
+      .select('id, genius_id, name, image_url, category, category_bonus, degree_bonus, collab_degree, status')
       .in('status', ['included', 'needs_review']);
 
     if (artistError) {
@@ -111,6 +113,7 @@ export class GameDataStore {
         category: a.category || 'underground',
         category_bonus: Number(a.category_bonus) || 40,
         degree_bonus: Number(a.degree_bonus) || 0,
+        collab_degree: Number(a.collab_degree) || 0,
       };
       this.artists.set(geniusId, artist);
     }
@@ -122,7 +125,7 @@ export class GameDataStore {
     while (true) {
       const { data, error: collabError } = await supabase!
         .from('collaborations')
-        .select('artist1_id, artist2_id, song_count, pair_bonus, confidence')
+        .select('artist1_id, artist2_id, song_count, pair_bonus, confidence, pair_family_count')
         .range(from, from + PAGE_SIZE - 1);
       if (collabError) {
         console.error('  Supabase collab load error:', collabError.message);
@@ -148,6 +151,7 @@ export class GameDataStore {
         song_count: Number(c.song_count) || 1,
         pair_bonus: Number(c.pair_bonus) || 0,
         confidence: Number(c.confidence) || 0.6,
+        pair_family_count: Number(c.pair_family_count) || 0,
       });
     }
 
@@ -187,6 +191,7 @@ export class GameDataStore {
         category: 'underground',
         category_bonus: 40,
         degree_bonus: 0,
+        collab_degree: 0,
       });
     }
 
@@ -207,6 +212,7 @@ export class GameDataStore {
           song_count: c.songs?.length || 1,
           pair_bonus: 0,
           confidence: c.confidence || 0.6,
+          pair_family_count: 0,
         });
       }
     }
@@ -236,6 +242,12 @@ export class GameDataStore {
       }
       this.collaboratorIndex.get(collab.artist1_id)!.add(collab.artist2_id);
       this.collaboratorIndex.get(collab.artist2_id)!.add(collab.artist1_id);
+    }
+
+    // collab_degree derive toujours de l'index en memoire (source de verite immediate,
+    // pas besoin d'attendre la migration + le job offline pour que degreeMult fonctionne)
+    for (const [, artist] of this.artists) {
+      artist.collab_degree = this.collaboratorIndex.get(artist.id)?.size ?? 0;
     }
   }
 
