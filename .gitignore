@@ -13,6 +13,9 @@ frontend/node_modules/
 
 # IDE
 .vscode/
+
+# Sorties de test locales
+tmp-pixellab-test/
 .idea/
 *.swp
 *.swo

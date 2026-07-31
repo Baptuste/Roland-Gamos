@@ -15,6 +15,7 @@
     "etl": "ts-node src/scripts/etl.ts",
     "db:push": "ts-node src/scripts/push-to-supabase.ts",
     "metrics:compute": "ts-node src/scripts/computeArtistMetrics.ts",
+    "pixellab:test": "ts-node src/scripts/assets/testPixelLabConnection.ts",
     "test": "jest"
   },
   "keywords": [

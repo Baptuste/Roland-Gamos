@@ -149,13 +149,17 @@ Seeds à ajouter : titre "Dépassement" + aura "Dépassement" (voir §2.3).
 ### 3.2 Pipeline Avatars — remplace DALL-E
 
 - **DALL-E abandonné** : pas viable long terme (pas de vrai pixel art natif, nécessite un post-traitement de pixelisation jamais implémenté dans le pipeline documenté).
-- **PixelLab** retenu — endpoint **Bitforge** (`create-image-bitforge`) : supporte une image de style de référence (`styleImage` + `styleStrength`), sortie 64×64 (dans la limite 200×200 de l'endpoint), fond transparent (`noBackground`).
+- **PixelLab** retenu — endpoint **Bitforge** (`POST https://api.pixellab.ai/v2/create-image-bitforge`, auth `Authorization: Bearer <token>`) : connexion testée et validée le 2026-07-31 (`npm run pixellab:test`, script `src/scripts/assets/testPixelLabConnection.ts`). Supporte une image de style de référence (`style_image`), une taille `image_size: {width, height}` (max 200×200), fond transparent (`no_background`). Réponse : `{ image: { type: 'base64', base64 }, usage: { type: 'generations', generations } }` — compte à crédits de génération, pas de facturation USD directe malgré ce qu'indique la doc publique.
+- **Résolution retenue : 128×128** (tranché empiriquement le 2026-07-31 par comparaison directe 64/128/200) :
+  - 64×64 : correct mais basique, peu de détail.
+  - **128×128 : le point idéal** — détail net (visage, accessoires, texture pixel art) tout en restant cohérent, coût quasi identique (crédits par génération, pas au pixel).
+  - 200×200 (le max de l'endpoint) : **dégradé** — le modèle perd la cohérence du sujet (têtes dupliquées/déformées, effet de collage). Ne pas utiliser malgré le fait que ce soit la limite technique de l'endpoint.
 - Contraintes de format (héritées du doc d'origine, toujours valables) : buste uniquement (tête + épaules, coupé au sternum), aucun bras/main visible, cadrage frontal ou 3/4, fond transparent, pixel art ~16 couleurs, pas d'anti-aliasing.
-- Étape critique : **verrouiller une image de style de référence** avant toute génération en série, pour garantir la cohérence visuelle entre tous les avatars (pas encore fait — à créer).
+- Étape critique restante : **verrouiller une image de style de référence** avant toute génération en série, pour garantir la cohérence visuelle entre tous les avatars (pas encore fait — à créer).
 - Script prévu : `src/scripts/assets/generateAvatars.ts` (manifest JSON de prompts → appel Bitforge → sauvegarde locale → upload Supabase Storage → insertion catalogue), sur le modèle des scripts ETL existants.
 - Stockage : Supabase Storage, bucket `Assets`, `avatars/<slug>.png`, URL publique dans `cosmetics_catalog.asset_url`.
 - Catégories avatar : `personnage` (peut être Neutre), `artiste_reel` (jamais Neutre — poids culturel), `animal` (variable). Principe "symbole > visage" quand un symbole iconique est plus fort que le visage (ex. masque, animal totem).
-- ⚠️ **Point de vigilance signalé, non tranché avec l'utilisateur** : les avatars inspirés d'artistes réels posent un risque de droit à l'image / droit à la ressemblance, indépendamment du fait que le prompt ne nomme jamais l'artiste réel (ça protège de la modération DALL-E/PixelLab, pas d'un litige commercial). À garder en tête pour la suite.
+- **Positionnement retenu (2026-07-31) : les avatars "artiste_reel" sont présentés comme des caricatures**, pas des portraits réalistes. Ça réduit le risque de droit à l'image (registre humoristique/stylisé assumé) mais ne l'élimine pas complètement : la caricature protège bien en contexte éditorial/satirique, moins nettement pour un usage commercial (cosmétique monétisée) au regard du droit à l'image patrimonial français. Le vrai filet de sécurité reste le principe déjà acté ci-dessus : "symbole > visage" (masque, animal totem, élément iconique plutôt que ressemblance faciale directe) + prompt qui ne nomme jamais l'artiste réel. Point à garder en tête, pas un feu vert juridique définitif.
 
 ### 3.3 Moteur d'aura procédural — remplace le CSS/SVG figé du doc d'origine
 
