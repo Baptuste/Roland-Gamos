@@ -1,4 +1,4 @@
-import { Game, GameStatus, createGame, CanonicalArtist } from '../types/Game';
+import { Game, GameStatus, createGame, CanonicalArtist, getTeamIds } from '../types/Game';
 import { Player } from '../types/Player';
 import { Turn, createTurn, InvalidReason } from '../types/Turn';
 import { gameDataStore } from './GameDataStore';
@@ -107,12 +107,33 @@ export class GameService {
       }
     }
 
+    // En mode équipe, ce premier joueur ne passe jamais par
+    // moveToNextPlayerByTeam (qui avance normalement le pointeur interne de
+    // son équipe) — sans ce rattrapage, la prochaine fois que son équipe
+    // rejoue, le pointeur (resté à 0) redonnerait la main au même joueur
+    // au lieu du suivant.
+    let teamNextMemberIndex = game.teamNextMemberIndex;
+    if (game.settings.teamsEnabled) {
+      const firstPlayer = game.players[firstPlayerIndex];
+      if (firstPlayer?.teamId) {
+        const teamMembers = game.players.filter((p) => p.teamId === firstPlayer.teamId);
+        const posInTeam = teamMembers.findIndex((p) => p.id === firstPlayer.id);
+        if (posInTeam >= 0) {
+          teamNextMemberIndex = {
+            ...(game.teamNextMemberIndex || {}),
+            [firstPlayer.teamId]: (posInTeam + 1) % teamMembers.length,
+          };
+        }
+      }
+    }
+
     const startedGame = {
       ...game,
       status: GameStatus.IN_PROGRESS,
       currentPlayerIndex: firstPlayerIndex,
       usedArtists: game.usedArtists || [],
       attemptsUsed: 0,
+      teamNextMemberIndex,
     };
 
     // Démarrer le premier tour
@@ -403,6 +424,10 @@ export class GameService {
    * Public pour permettre à GameManager de l'utiliser lors des timeouts
    */
   moveToNextPlayer(game: Game): Game {
+    if (game.settings.teamsEnabled) {
+      return this.moveToNextPlayerByTeam(game);
+    }
+
     let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
 
     // Trouver le prochain joueur non éliminé
@@ -435,12 +460,86 @@ export class GameService {
   }
 
   /**
+   * Rotation alternée par équipe : passe à l'équipe suivante (dans l'ordre
+   * team-0, team-1, ...), qui reprend son propre round-robin interne là où
+   * elle l'avait laissé (game.teamNextMemberIndex). currentPlayerIndex reste
+   * un index direct dans game.players (jamais réordonné — players[0] doit
+   * toujours rester l'hôte, cf. GameManager).
+   */
+  private moveToNextPlayerByTeam(game: Game): Game {
+    const teamIds = getTeamIds(game.settings.teamCount);
+    const activeTeams = this.getActiveTeams(game.players, teamIds);
+
+    if (activeTeams.size <= 1) {
+      return {
+        ...game,
+        status: GameStatus.FINISHED,
+        currentTurnEndsAt: undefined,
+        attemptsUsed: 0,
+      };
+    }
+
+    const currentPlayer = game.players[game.currentPlayerIndex];
+    const curTeamPos = currentPlayer?.teamId ? teamIds.indexOf(currentPlayer.teamId) : -1;
+    const startPos = curTeamPos >= 0 ? curTeamPos : 0;
+    const pointers: Record<string, number> = { ...(game.teamNextMemberIndex || {}) };
+
+    for (let i = 1; i <= teamIds.length; i++) {
+      const candidateTeamId = teamIds[(startPos + i) % teamIds.length];
+      if (!activeTeams.has(candidateTeamId)) continue;
+
+      const members = game.players.filter((p) => p.teamId === candidateTeamId);
+      if (members.length === 0) continue;
+
+      const pointer = pointers[candidateTeamId] ?? 0;
+      for (let attempt = 0; attempt < members.length; attempt++) {
+        const idx = (pointer + attempt) % members.length;
+        const member = members[idx];
+        if (!member.isEliminated) {
+          pointers[candidateTeamId] = (idx + 1) % members.length;
+          return {
+            ...game,
+            currentPlayerIndex: game.players.findIndex((p) => p.id === member.id),
+            teamNextMemberIndex: pointers,
+          };
+        }
+      }
+    }
+
+    // Aucun membre actif trouvé malgré activeTeams.size > 1 : ne devrait pas
+    // arriver (activeTeams est calculé sur les mêmes joueurs), sécurité quand même.
+    return {
+      ...game,
+      status: GameStatus.FINISHED,
+      currentTurnEndsAt: undefined,
+      attemptsUsed: 0,
+    };
+  }
+
+  /**
+   * Ids des équipes ayant encore au moins un membre actif.
+   */
+  private getActiveTeams(players: Player[], teamIds: string[]): Set<string> {
+    const active = new Set<string>();
+    for (const p of players) {
+      if (!p.isEliminated && p.teamId && teamIds.includes(p.teamId)) {
+        active.add(p.teamId);
+      }
+    }
+    return active;
+  }
+
+  /**
    * Retire une vie à un joueur. Ne l'élimine réellement que s'il n'a plus
    * de vie (livesRemaining atteint 0) — avec maxLives=1 (défaut historique),
    * une perte de vie élimine toujours immédiatement, comme avant.
    * Public pour permettre à GameManager de l'utiliser lors des timeouts.
    */
   eliminatePlayer(game: Game, playerId: string, reason?: InvalidReason): Game {
+    if (game.settings.teamsEnabled) {
+      return this.eliminatePlayerTeamMode(game, playerId);
+    }
+
     const updatedPlayers = game.players.map((player) => {
       if (player.id !== playerId) return player;
       const livesRemaining = Math.max(0, player.livesRemaining - 1);
@@ -461,6 +560,58 @@ export class GameService {
   }
 
   /**
+   * Retire une vie/erreur en mode équipe. Deux mécaniques distinctes selon
+   * settings.eliminationMode (voir CLAUDE_3.md §7.1) :
+   * - 'vies' : chaque membre garde ses propres vies (même logique qu'en solo).
+   *   Un membre à 0 vies sort de la rotation, l'équipe survit tant qu'il en
+   *   reste un autre actif.
+   * - 'erreurs' : l'équipe partage un pool d'erreurs commun (indépendant des
+   *   vies individuelles). N'importe quel membre qui se trompe le consomme ;
+   *   à 0, toute l'équipe est éliminée d'un coup, peu importe les vies
+   *   individuelles restantes de ses membres.
+   */
+  private eliminatePlayerTeamMode(game: Game, playerId: string): Game {
+    const teamIds = getTeamIds(game.settings.teamCount);
+    const targetPlayer = game.players.find((p) => p.id === playerId);
+    const teamId = targetPlayer?.teamId;
+
+    let updatedPlayers = game.players;
+    let teamErrorsRemaining = game.teamErrorsRemaining;
+
+    if (game.settings.eliminationMode === 'erreurs' && teamId) {
+      const currentRemaining = game.teamErrorsRemaining?.[teamId] ?? game.settings.maxLives;
+      const remaining = Math.max(0, currentRemaining - 1);
+      teamErrorsRemaining = { ...(game.teamErrorsRemaining || {}), [teamId]: remaining };
+
+      if (remaining <= 0) {
+        // Pool épuisé : toute l'équipe est éliminée d'un coup
+        updatedPlayers = game.players.map((p) =>
+          p.teamId === teamId ? { ...p, isEliminated: true } : p
+        );
+      }
+      // Sinon : pool entamé mais pas vide, aucun joueur n'est marqué éliminé
+    } else {
+      // Mode 'vies' (ou joueur sans équipe assignée, edge case défensif) :
+      // même logique individuelle que le mode solo/sans-équipe.
+      updatedPlayers = game.players.map((player) => {
+        if (player.id !== playerId) return player;
+        const livesRemaining = Math.max(0, player.livesRemaining - 1);
+        return { ...player, livesRemaining, isEliminated: livesRemaining <= 0 };
+      });
+    }
+
+    const activeTeams = this.getActiveTeams(updatedPlayers, teamIds);
+    const newStatus = activeTeams.size <= 1 ? GameStatus.FINISHED : game.status;
+
+    return {
+      ...game,
+      players: updatedPlayers,
+      teamErrorsRemaining,
+      status: newStatus,
+    };
+  }
+
+  /**
    * Si la partie est toujours en cours, passe la main au joueur suivant et
    * démarre son tour. Nécessaire dès que maxLives > 1 : un joueur qui
    * survit à une perte de vie doit pouvoir laisser la partie continuer
@@ -476,9 +627,16 @@ export class GameService {
    * Message de statut cohérent selon qu'une perte de vie élimine le joueur
    * ou non (maxLives > 1).
    */
-  private lifeLossMessage(damagedGame: Game, playerId: string, playerName: string): string {
+  lifeLossMessage(damagedGame: Game, playerId: string, playerName: string): string {
     const player = damagedGame.players.find(p => p.id === playerId);
-    if (!player || player.isEliminated) return `${playerName} est éliminé.`;
+
+    if (damagedGame.settings.teamsEnabled && damagedGame.settings.eliminationMode === 'erreurs' && player?.teamId) {
+      const remaining = damagedGame.teamErrorsRemaining?.[player.teamId];
+      if (player.isEliminated) return `Pool d'erreurs de l'équipe épuisé. Équipe éliminée.`;
+      return `${playerName} entame le pool d'erreurs de l'équipe (${remaining} restante${remaining !== 1 ? 's' : ''}).`;
+    }
+
+    if (!player || player.isEliminated) return `${playerName} est éliminé${damagedGame.settings.teamsEnabled ? ', son équipe continue si un coéquipier est encore actif.' : '.'}`;
     const lives = player.livesRemaining;
     return `${playerName} perd une vie (${lives} restante${lives > 1 ? 's' : ''}).`;
   }

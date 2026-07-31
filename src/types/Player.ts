@@ -17,6 +17,7 @@ export interface Player {
   isEliminated: boolean;
   livesRemaining: number;
   jokers?: Jokers;
+  teamId?: string; // pertinent seulement si settings.teamsEnabled (voir types/Game.ts)
 }
 
 /**

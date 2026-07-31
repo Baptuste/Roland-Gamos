@@ -17,13 +17,23 @@ export interface GameSettings {
   turnDurationMs: number; // 15000 | 30000 | 60000
   maxLives: number;       // 1 | 2 | 3
   jokersEnabled: boolean; // stocké, aucune mécanique branchée pour l'instant
+  teamsEnabled: boolean;
+  teamCount: number;      // 2 | 3 | 4, pertinent seulement si teamsEnabled
+  eliminationMode: 'vies' | 'erreurs'; // pertinent seulement si teamsEnabled
 }
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   turnDurationMs: 30000,
   maxLives: 1,
   jokersEnabled: false,
+  teamsEnabled: false,
+  teamCount: 2,
+  eliminationMode: 'vies',
 };
+
+export function getTeamIds(teamCount: number): string[] {
+  return Array.from({ length: teamCount }, (_, i) => `team-${i}`);
+}
 
 export interface Game {
   id: string;
@@ -38,6 +48,7 @@ export interface Game {
   attemptsUsed?: number;
   settings: GameSettings;
   readyPlayerIds: string[];
+  teamErrorsRemaining?: Record<string, number>; // teamId -> pool d'erreurs partagé restant (mode ERREURS)
 }
 
 export function createGame(id: string, players: Player[], settings: GameSettings = DEFAULT_GAME_SETTINGS): Game {

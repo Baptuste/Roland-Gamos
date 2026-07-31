@@ -345,6 +345,25 @@
   gap: 0.75rem;
 }
 
+.team-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.team-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.team-group-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 0.5rem;
+}
+
 .player-item {
   background: var(--bg-surface);
   padding: 1rem;

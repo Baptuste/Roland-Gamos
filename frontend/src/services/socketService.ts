@@ -33,6 +33,8 @@ export interface SocketEvents {
   'reconnect-game': (data: { gameCode: string; playerId: string }) => void;
   'update-game-settings': (data: { gameId: string; settings: Partial<GameSettings> }) => void;
   'toggle-ready': (data: { gameId: string }) => void;
+  'assign-team': (data: { gameId: string; targetPlayerId: string; teamId: string }) => void;
+  'randomize-teams': (data: { gameId: string }) => void;
 
   // Événements reçus du serveur
   'game-created': (data: { gameId: string; gameCode: string; player: Player; game: Game }) => void;

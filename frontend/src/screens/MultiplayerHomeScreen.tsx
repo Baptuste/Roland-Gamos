@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { socketService } from '../services/socketService';
-import { Game, Player, GameSettings } from '../shared/types';
+import { Game, Player, GameSettings, getTeamIds } from '../shared/types';
 import '../styles/HomeScreen.css';
+
+const TEAM_LABELS = ['Équipe A', 'Équipe B', 'Équipe C', 'Équipe D'];
+const TEAM_COLORS = ['var(--primary)', 'var(--secondary)', 'var(--accent)', 'var(--error)'];
 
 interface MultiplayerHomeScreenProps {
   onGameJoined: (game: Game, player: Player, code?: string) => void;
@@ -293,6 +296,16 @@ export default function MultiplayerHomeScreen({
     socketService.emit('toggle-ready', { gameId: currentGame.id });
   };
 
+  const handleAssignTeam = (targetPlayerId: string, teamId: string) => {
+    if (!currentGame) return;
+    socketService.emit('assign-team', { gameId: currentGame.id, targetPlayerId, teamId });
+  };
+
+  const handleRandomizeTeams = () => {
+    if (!currentGame) return;
+    socketService.emit('randomize-teams', { gameId: currentGame.id });
+  };
+
   // Si une partie est créée/rejointe mais pas encore démarrée
   if (currentGame && currentPlayer && currentGame.status === 'waiting') {
     const isHost = currentGame.players[0].id === currentPlayer.id;
@@ -312,30 +325,83 @@ export default function MultiplayerHomeScreen({
             <div className="waiting-section mt-3">
               <h3 className="waiting-title">Joueurs ({currentGame.players.length})</h3>
               <div className="players-waiting-list">
-                {currentGame.players.map((player) => {
-                  const isPlayerHost = player.id === currentGame.players[0].id;
-                  const isReady = currentGame.readyPlayerIds.includes(player.id);
-                  return (
-                    <div
-                      key={player.id}
-                      className={`player-waiting-item ${
-                        player.id === currentPlayer.id ? 'player-you' : ''
-                      }`}
-                    >
-                      <span className="player-waiting-name">{player.name}</span>
-                      {player.id === currentPlayer.id && (
-                        <span className="player-you-badge">Vous</span>
-                      )}
-                      {isPlayerHost ? (
-                        <span className="player-host-badge">Hôte</span>
-                      ) : (
-                        <span className={`player-ready-badge ${isReady ? 'is-ready' : 'is-waiting'}`}>
-                          {isReady ? 'Prêt' : '...'}
-                        </span>
-                      )}
-                    </div>
+                {(() => {
+                  const teamsEnabled = currentGame.settings.teamsEnabled;
+                  const teamIds = teamsEnabled ? getTeamIds(currentGame.settings.teamCount) : [];
+
+                  const renderPlayerRow = (player: Player) => {
+                    const isPlayerHost = player.id === currentGame.players[0].id;
+                    const isReady = currentGame.readyPlayerIds.includes(player.id);
+                    return (
+                      <div
+                        key={player.id}
+                        className={`player-waiting-item ${
+                          player.id === currentPlayer.id ? 'player-you' : ''
+                        }`}
+                      >
+                        <span className="player-waiting-name">{player.name}</span>
+                        {player.id === currentPlayer.id && (
+                          <span className="player-you-badge">Vous</span>
+                        )}
+                        {isHost && teamsEnabled && (
+                          <div className="team-assign-buttons">
+                            {teamIds.map((teamId, idx) => (
+                              <button
+                                key={teamId}
+                                type="button"
+                                className={`team-assign-btn ${player.teamId === teamId ? 'active' : ''}`}
+                                style={{ borderColor: TEAM_COLORS[idx], color: player.teamId === teamId ? '#fff' : TEAM_COLORS[idx], background: player.teamId === teamId ? TEAM_COLORS[idx] : 'transparent' }}
+                                onClick={() => handleAssignTeam(player.id, teamId)}
+                                title={TEAM_LABELS[idx]}
+                              >
+                                {TEAM_LABELS[idx].slice(-1)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {isPlayerHost ? (
+                          <span className="player-host-badge">Hôte</span>
+                        ) : (
+                          <span className={`player-ready-badge ${isReady ? 'is-ready' : 'is-waiting'}`}>
+                            {isReady ? 'Prêt' : '...'}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  };
+
+                  if (!teamsEnabled) {
+                    return currentGame.players.map((player) => renderPlayerRow(player));
+                  }
+
+                  const unassigned = currentGame.players.filter(
+                    (p) => !p.teamId || !teamIds.includes(p.teamId)
                   );
-                })}
+
+                  return (
+                    <>
+                      {teamIds.map((teamId, idx) => {
+                        const members = currentGame.players.filter((p) => p.teamId === teamId);
+                        return (
+                          <div key={teamId} className="team-group">
+                            <div className="team-group-header" style={{ color: TEAM_COLORS[idx] }}>
+                              {TEAM_LABELS[idx]} ({members.length})
+                            </div>
+                            {members.map((player) => renderPlayerRow(player))}
+                          </div>
+                        );
+                      })}
+                      {unassigned.length > 0 && (
+                        <div className="team-group">
+                          <div className="team-group-header" style={{ color: 'var(--text-muted)' }}>
+                            Non assignés ({unassigned.length})
+                          </div>
+                          {unassigned.map((player) => renderPlayerRow(player))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               <div className="settings-section mt-3">
@@ -403,6 +469,86 @@ export default function MultiplayerHomeScreen({
                     <span className="settings-value">{currentGame.settings.jokersEnabled ? 'On' : 'Off'}</span>
                   )}
                 </div>
+                <div className="settings-row">
+                  <span className="settings-label">Teams</span>
+                  {isHost ? (
+                    <div className="mode-selector settings-choice">
+                      <button
+                        type="button"
+                        className={`mode-btn ${!currentGame.settings.teamsEnabled ? 'active' : ''}`}
+                        onClick={() => handleUpdateSetting({ teamsEnabled: false })}
+                      >
+                        Off
+                      </button>
+                      <button
+                        type="button"
+                        className={`mode-btn ${currentGame.settings.teamsEnabled ? 'active' : ''}`}
+                        onClick={() => handleUpdateSetting({ teamsEnabled: true })}
+                      >
+                        On
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="settings-value">{currentGame.settings.teamsEnabled ? 'On' : 'Off'}</span>
+                  )}
+                </div>
+                {currentGame.settings.teamsEnabled && (
+                  <>
+                    <div className="settings-row">
+                      <span className="settings-label">Nombre d'équipes</span>
+                      {isHost ? (
+                        <div className="mode-selector settings-choice">
+                          {[2, 3, 4].map((count) => (
+                            <button
+                              key={count}
+                              type="button"
+                              className={`mode-btn ${currentGame.settings.teamCount === count ? 'active' : ''}`}
+                              onClick={() => handleUpdateSetting({ teamCount: count })}
+                            >
+                              {count}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="settings-value">{currentGame.settings.teamCount}</span>
+                      )}
+                    </div>
+                    <div className="settings-row">
+                      <span className="settings-label">Élimination</span>
+                      {isHost ? (
+                        <div className="mode-selector settings-choice">
+                          <button
+                            type="button"
+                            className={`mode-btn ${currentGame.settings.eliminationMode === 'vies' ? 'active' : ''}`}
+                            onClick={() => handleUpdateSetting({ eliminationMode: 'vies' })}
+                          >
+                            Vies
+                          </button>
+                          <button
+                            type="button"
+                            className={`mode-btn ${currentGame.settings.eliminationMode === 'erreurs' ? 'active' : ''}`}
+                            onClick={() => handleUpdateSetting({ eliminationMode: 'erreurs' })}
+                          >
+                            Erreurs
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="settings-value">
+                          {currentGame.settings.eliminationMode === 'erreurs' ? 'Erreurs' : 'Vies'}
+                        </span>
+                      )}
+                    </div>
+                    {isHost && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary w-full mt-2"
+                        onClick={handleRandomizeTeams}
+                      >
+                        🎲 Assignation aléatoire
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
 
               {isHost && (

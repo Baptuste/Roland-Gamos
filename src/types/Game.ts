@@ -29,12 +29,18 @@ export interface GameSettings {
   turnDurationMs: number; // 15000 | 30000 | 60000
   maxLives: number;       // 1 | 2 | 3
   jokersEnabled: boolean; // stocké, aucune mécanique branchée pour l'instant
+  teamsEnabled: boolean;
+  teamCount: number;      // 2 | 3 | 4, pertinent seulement si teamsEnabled
+  eliminationMode: 'vies' | 'erreurs'; // pertinent seulement si teamsEnabled — voir CLAUDE_3.md §7.1
 }
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   turnDurationMs: 30000,
   maxLives: 1,
   jokersEnabled: false,
+  teamsEnabled: false,
+  teamCount: 2,
+  eliminationMode: 'vies',
 };
 
 /**
@@ -53,6 +59,18 @@ export interface Game {
   attemptsUsed?: number;          // Nombre de tentatives utilisées par le joueur actuel
   settings: GameSettings;
   readyPlayerIds: string[];       // joueurs non-hôtes ayant appuyé sur PRÊT
+
+  // Mode équipe (pertinents seulement si settings.teamsEnabled)
+  teamErrorsRemaining?: Record<string, number>;   // teamId -> pool d'erreurs partagé restant (mode ERREURS)
+  teamNextMemberIndex?: Record<string, number>;   // teamId -> index du prochain membre à jouer (rotation round-robin)
+}
+
+/**
+ * Ids d'équipe déterministes ('team-0'..'team-(teamCount-1)'), dérivés du
+ * réglage plutôt que stockés — évite toute désynchronisation si teamCount change.
+ */
+export function getTeamIds(teamCount: number): string[] {
+  return Array.from({ length: teamCount }, (_, i) => `team-${i}`);
 }
 
 /**

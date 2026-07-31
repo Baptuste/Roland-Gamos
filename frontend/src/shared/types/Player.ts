@@ -11,6 +11,7 @@ export interface Player {
   isEliminated: boolean;
   livesRemaining: number;
   jokers?: Jokers;
+  teamId?: string;
 }
 
 export function createPlayer(id: string, name: string, maxLives: number = 1): Player {

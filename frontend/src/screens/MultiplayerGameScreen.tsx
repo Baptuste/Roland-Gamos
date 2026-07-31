@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Game, GameStatus } from '../shared/types';
+import { Game, GameStatus, getTeamIds } from '../shared/types';
 import { socketService } from '../services/socketService';
 import { GameService } from '../shared/services/GameService';
 import { useArtistAutocomplete } from '../hooks/useArtistAutocomplete';
 import '../styles/GameScreen.css';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+const TEAM_LABELS = ['Équipe A', 'Équipe B', 'Équipe C', 'Équipe D'];
+const TEAM_COLORS = ['var(--primary)', 'var(--secondary)', 'var(--accent)', 'var(--error)'];
 
 interface MultiplayerGameScreenProps {
   game: Game;
@@ -190,7 +192,28 @@ export default function MultiplayerGameScreen({
         {isGameFinished ? (
           <div className="card game-finished-card fade-in">
             <h2 className="finished-title">🎉 Partie terminée !</h2>
-            {activePlayers.length > 0 ? (
+            {game.settings.teamsEnabled ? (
+              activePlayers.length > 0 ? (
+                (() => {
+                  const winningTeamId = activePlayers[0].teamId;
+                  const teamIds = getTeamIds(game.settings.teamCount);
+                  const teamIdx = winningTeamId ? teamIds.indexOf(winningTeamId) : -1;
+                  const teamMembers = game.players.filter((p) => p.teamId === winningTeamId);
+                  return (
+                    <div className="winner-section">
+                      <p className="winner-text" style={{ color: teamIdx >= 0 ? TEAM_COLORS[teamIdx] : undefined }}>
+                        <strong>{teamIdx >= 0 ? TEAM_LABELS[teamIdx] : 'Une équipe'}</strong> a gagné !
+                      </p>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        {teamMembers.map((m) => m.name).join(', ')}
+                      </p>
+                    </div>
+                  );
+                })()
+              ) : (
+                <p className="winner-text">Toutes les équipes ont été éliminées</p>
+              )
+            ) : activePlayers.length > 0 ? (
               <div className="winner-section">
                 <p className="winner-text">
                   <strong>{activePlayers[0].name}</strong> a gagné !
@@ -382,8 +405,8 @@ export default function MultiplayerGameScreen({
         {/* Liste des joueurs */}
         <div className="card players-card fade-in">
           <h3 className="players-card-title">Joueurs</h3>
-          <div className="players-grid">
-            {game.players.map((player) => {
+          {(() => {
+            const renderPlayerItem = (player: typeof game.players[number]) => {
               const isCurrent = currentPlayer?.id === player.id;
               const isActive = !player.isEliminated;
               const isMe = player.id === currentPlayerId;
@@ -415,8 +438,38 @@ export default function MultiplayerGameScreen({
                   </div>
                 </div>
               );
-            })}
-          </div>
+            };
+
+            if (!game.settings.teamsEnabled) {
+              return <div className="players-grid">{game.players.map(renderPlayerItem)}</div>;
+            }
+
+            const teamIds = getTeamIds(game.settings.teamCount);
+            return (
+              <div className="team-groups">
+                {teamIds.map((teamId, idx) => {
+                  const members = game.players.filter((p) => p.teamId === teamId);
+                  if (members.length === 0) return null;
+                  const teamActive = members.some((p) => !p.isEliminated);
+                  const errorsRemaining = game.teamErrorsRemaining?.[teamId];
+                  return (
+                    <div key={teamId} className="team-group mt-3">
+                      <div className="team-group-header" style={{ color: TEAM_COLORS[idx] }}>
+                        {TEAM_LABELS[idx]}
+                        {!teamActive && <span className="status-badge status-eliminated" style={{ marginLeft: '0.5rem' }}>Éliminée</span>}
+                        {game.settings.eliminationMode === 'erreurs' && errorsRemaining !== undefined && (
+                          <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            Erreurs restantes : {errorsRemaining}
+                          </span>
+                        )}
+                      </div>
+                      <div className="players-grid">{members.map(renderPlayerItem)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Historique des tours */}

@@ -4,6 +4,8 @@ import { Game, GameStatus, GameSettings } from '../types/Game';
 
 const ALLOWED_TURN_DURATIONS_MS = [15000, 30000, 60000];
 const ALLOWED_MAX_LIVES = [1, 2, 3];
+const ALLOWED_TEAM_COUNTS = [2, 3, 4];
+const ALLOWED_ELIMINATION_MODES = ['vies', 'erreurs'];
 
 /**
  * Valide/filtre les réglages reçus du client — n'accepte que des valeurs
@@ -21,6 +23,15 @@ function sanitizeSettings(raw: unknown): Partial<GameSettings> {
   }
   if (typeof input.jokersEnabled === 'boolean') {
     settings.jokersEnabled = input.jokersEnabled;
+  }
+  if (typeof input.teamsEnabled === 'boolean') {
+    settings.teamsEnabled = input.teamsEnabled;
+  }
+  if (ALLOWED_TEAM_COUNTS.includes(input.teamCount as number)) {
+    settings.teamCount = input.teamCount;
+  }
+  if (ALLOWED_ELIMINATION_MODES.includes(input.eliminationMode as string)) {
+    settings.eliminationMode = input.eliminationMode;
   }
   return settings;
 }
@@ -87,6 +98,48 @@ export function setupSocketHandlers(io: Server, gameManager: GameManager) {
         io.to(data.gameId).emit('game-state', { game, gameCode: gameManager.getGameCode(data.gameId) });
       } catch (error) {
         socket.emit('error', { message: 'Erreur lors du changement de statut prêt' });
+      }
+    });
+
+    // Assigner un joueur à une équipe (hôte uniquement, partie en attente)
+    socket.on('assign-team', (data: { gameId: string; targetPlayerId: string; teamId: string }) => {
+      try {
+        const playerInfo = gameManager.getPlayerBySocket(socket.id);
+        if (!playerInfo) {
+          socket.emit('error', { message: 'Joueur non trouvé' });
+          return;
+        }
+
+        const game = gameManager.assignTeam(data.gameId, playerInfo.playerId, data.targetPlayerId, data.teamId);
+        if (!game) {
+          socket.emit('error', { message: 'Impossible d\'assigner cette équipe' });
+          return;
+        }
+
+        io.to(data.gameId).emit('game-state', { game, gameCode: gameManager.getGameCode(data.gameId) });
+      } catch (error) {
+        socket.emit('error', { message: 'Erreur lors de l\'assignation d\'équipe' });
+      }
+    });
+
+    // Réassigner toutes les équipes aléatoirement (hôte uniquement, partie en attente)
+    socket.on('randomize-teams', (data: { gameId: string }) => {
+      try {
+        const playerInfo = gameManager.getPlayerBySocket(socket.id);
+        if (!playerInfo) {
+          socket.emit('error', { message: 'Joueur non trouvé' });
+          return;
+        }
+
+        const game = gameManager.randomizeTeams(data.gameId, playerInfo.playerId);
+        if (!game) {
+          socket.emit('error', { message: 'Impossible de réassigner les équipes' });
+          return;
+        }
+
+        io.to(data.gameId).emit('game-state', { game, gameCode: gameManager.getGameCode(data.gameId) });
+      } catch (error) {
+        socket.emit('error', { message: 'Erreur lors de la réassignation des équipes' });
       }
     });
 

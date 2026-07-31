@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import { Game, GameStatus, createGame, GameSettings, DEFAULT_GAME_SETTINGS } from '../types/Game';
+import { Game, GameStatus, createGame, GameSettings, DEFAULT_GAME_SETTINGS, getTeamIds } from '../types/Game';
 import { Player, createPlayer } from '../types/Player';
 import { GameService } from '../services/GameService';
 import { ProposalResult } from '../services/GameService';
@@ -213,7 +213,19 @@ export class GameManager {
       return null; // Pas assez de joueurs
     }
 
-    const startedGame = gameService.startGame(game);
+    let gameToStart = game;
+    if (game.settings.teamsEnabled) {
+      // Filet de sécurité : assigne une équipe à qui n'en a pas encore (ne
+      // touche pas aux assignations déjà faites par l'hôte).
+      const players = this.assignTeamsBalanced(game.players, game.settings.teamCount, true);
+      const teamErrorsRemaining = game.settings.eliminationMode === 'erreurs'
+        ? Object.fromEntries(getTeamIds(game.settings.teamCount).map((t) => [t, game.settings.maxLives]))
+        : undefined;
+      gameToStart = { ...game, players, teamErrorsRemaining, teamNextMemberIndex: {} };
+      this.games.set(gameId, gameToStart);
+    }
+
+    const startedGame = gameService.startGame(gameToStart);
     this.games.set(gameId, startedGame);
 
     // Programmer le timer pour ce tour
@@ -235,14 +247,105 @@ export class GameManager {
     if (game.players[0].id !== playerId) return null; // hôte uniquement
 
     const updatedSettings: GameSettings = { ...game.settings, ...settings };
+    let players = game.players.map(p => ({ ...p, livesRemaining: updatedSettings.maxLives }));
+
+    // Si le nombre d'équipes change, les teamId existants peuvent pointer hors
+    // plage — on réassigne tout le monde. Si Teams vient d'être activé, on
+    // n'assigne que ceux qui n'ont pas encore d'équipe (préserve les choix
+    // déjà faits si l'hôte réactive après avoir désactivé puis réactivé).
+    const teamCountChanged = settings.teamCount !== undefined && settings.teamCount !== game.settings.teamCount;
+    const teamsJustEnabled = settings.teamsEnabled === true && !game.settings.teamsEnabled;
+
+    if (updatedSettings.teamsEnabled && teamCountChanged) {
+      players = this.assignTeamsBalanced(players, updatedSettings.teamCount, false);
+    } else if (updatedSettings.teamsEnabled && teamsJustEnabled) {
+      players = this.assignTeamsBalanced(players, updatedSettings.teamCount, true);
+    }
+
     const updatedGame: Game = {
       ...game,
       settings: updatedSettings,
-      players: game.players.map(p => ({ ...p, livesRemaining: updatedSettings.maxLives })),
+      players,
     };
 
     this.games.set(gameId, updatedGame);
     return updatedGame;
+  }
+
+  /**
+   * Assigne une équipe à un joueur précis (hôte uniquement, lobby en attente).
+   */
+  assignTeam(gameId: string, requesterId: string, targetPlayerId: string, teamId: string): Game | null {
+    const game = this.games.get(gameId);
+    if (!game) return null;
+    if (game.status !== GameStatus.WAITING) return null;
+    if (game.players[0].id !== requesterId) return null; // hôte uniquement
+    if (!game.settings.teamsEnabled) return null;
+    if (!getTeamIds(game.settings.teamCount).includes(teamId)) return null;
+    if (!game.players.some((p) => p.id === targetPlayerId)) return null;
+
+    const updatedGame: Game = {
+      ...game,
+      players: game.players.map((p) => (p.id === targetPlayerId ? { ...p, teamId } : p)),
+    };
+
+    this.games.set(gameId, updatedGame);
+    return updatedGame;
+  }
+
+  /**
+   * Réassigne tous les joueurs aléatoirement entre les équipes configurées,
+   * répartition équilibrée (hôte uniquement, lobby en attente).
+   */
+  randomizeTeams(gameId: string, requesterId: string): Game | null {
+    const game = this.games.get(gameId);
+    if (!game) return null;
+    if (game.status !== GameStatus.WAITING) return null;
+    if (game.players[0].id !== requesterId) return null; // hôte uniquement
+    if (!game.settings.teamsEnabled) return null;
+
+    const updatedGame: Game = {
+      ...game,
+      players: this.assignTeamsBalanced(game.players, game.settings.teamCount, false),
+    };
+
+    this.games.set(gameId, updatedGame);
+    return updatedGame;
+  }
+
+  /**
+   * Répartit des joueurs entre les équipes de façon équilibrée (Fisher-Yates
+   * puis attribution à l'équipe la moins peuplée). `onlyUnassigned=true` ne
+   * touche qu'aux joueurs sans teamId valide (préserve les assignations
+   * manuelles déjà faites) ; `false` réassigne tout le monde.
+   */
+  private assignTeamsBalanced(players: Player[], teamCount: number, onlyUnassigned: boolean): Player[] {
+    const teamIds = getTeamIds(teamCount);
+    const counts: Record<string, number> = Object.fromEntries(teamIds.map((t) => [t, 0]));
+    const result = players.map((p) => ({ ...p }));
+
+    if (onlyUnassigned) {
+      for (const p of result) {
+        if (p.teamId && teamIds.includes(p.teamId)) counts[p.teamId]++;
+      }
+    }
+
+    const toAssign = onlyUnassigned
+      ? result.filter((p) => !p.teamId || !teamIds.includes(p.teamId))
+      : result;
+
+    for (let i = toAssign.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [toAssign[i], toAssign[j]] = [toAssign[j], toAssign[i]];
+    }
+
+    for (const p of toAssign) {
+      const teamId = teamIds.reduce((min, t) => (counts[t] < counts[min] ? t : min), teamIds[0]);
+      p.teamId = teamId;
+      counts[teamId]++;
+    }
+
+    return result;
   }
 
   /**
@@ -340,10 +443,7 @@ export class GameManager {
 
     // Notifier tous les clients de la mise à jour de la partie
     if (this.io) {
-      const damagedPlayer = updatedGame.players.find(p => p.id === currentPlayer.id);
-      const lifeLossMsg = !damagedPlayer || damagedPlayer.isEliminated
-        ? `${currentPlayer.name} est éliminé.`
-        : `${currentPlayer.name} perd une vie (${damagedPlayer.livesRemaining} restante${damagedPlayer.livesRemaining > 1 ? 's' : ''}).`;
+      const lifeLossMsg = gameService.lifeLossMessage(updatedGame, currentPlayer.id, currentPlayer.name);
       const message = finalGame.status === GameStatus.FINISHED
         ? `Le temps est écoulé. ${lifeLossMsg} La partie est terminée.`
         : `Le temps est écoulé. ${lifeLossMsg}`;
