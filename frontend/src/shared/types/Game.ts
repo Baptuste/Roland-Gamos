@@ -16,7 +16,9 @@ export interface CanonicalArtist {
 export interface GameSettings {
   turnDurationMs: number; // 15000 | 30000 | 60000
   maxLives: number;       // 1 | 2 | 3
-  jokersEnabled: boolean; // stocké, aucune mécanique branchée pour l'instant
+  jokersEnabled: boolean;
+  jokerSelectionMode: 'manuelle' | 'aleatoire'; // pertinent seulement si jokersEnabled
+  hintsEnabled: boolean;  // Aide (collabs connues) + Historique visibles par défaut
   teamsEnabled: boolean;
   teamCount: number;      // 2 | 3 | 4, pertinent seulement si teamsEnabled
   eliminationMode: 'vies' | 'erreurs'; // pertinent seulement si teamsEnabled
@@ -26,6 +28,8 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   turnDurationMs: 30000,
   maxLives: 1,
   jokersEnabled: false,
+  jokerSelectionMode: 'aleatoire',
+  hintsEnabled: true,
   teamsEnabled: false,
   teamCount: 2,
   eliminationMode: 'vies',
@@ -49,6 +53,11 @@ export interface Game {
   settings: GameSettings;
   readyPlayerIds: string[];
   teamErrorsRemaining?: Record<string, number>; // teamId -> pool d'erreurs partagé restant (mode ERREURS)
+  turnJokerState?: {
+    shieldActive?: boolean;
+    comboArtistsPlayed?: number;
+    archivesRevealedPlayerId?: string;
+  };
 }
 
 export function createGame(id: string, players: Player[], settings: GameSettings = DEFAULT_GAME_SETTINGS): Game {

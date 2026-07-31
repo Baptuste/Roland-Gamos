@@ -1,10 +1,19 @@
 import { useState, useEffect } from 'react';
 import { socketService } from '../services/socketService';
-import { Game, Player, GameSettings, getTeamIds } from '../shared/types';
+import { Game, Player, GameSettings, getTeamIds, JokerType } from '../shared/types';
 import '../styles/HomeScreen.css';
 
 const TEAM_LABELS = ['Équipe A', 'Équipe B', 'Équipe C', 'Équipe D'];
 const TEAM_COLORS = ['var(--primary)', 'var(--secondary)', 'var(--accent)', 'var(--error)'];
+const JOKER_TYPES: JokerType[] = ['timer', 'skip', 'combo', 'bouclier', 'archives', 'resurrection'];
+const JOKER_LABELS: Record<JokerType, string> = {
+  timer: 'Timer',
+  skip: 'Skip',
+  combo: 'Combo',
+  bouclier: 'Bouclier',
+  archives: 'Archives',
+  resurrection: 'Résurrection',
+};
 
 interface MultiplayerHomeScreenProps {
   onGameJoined: (game: Game, player: Player, code?: string) => void;
@@ -37,6 +46,7 @@ export default function MultiplayerHomeScreen({
   const [currentGame, setCurrentGame] = useState<Game | null>(initialGame);
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(initialPlayer);
   const [createdGameCode, setCreatedGameCode] = useState<string | null>(initialGameCode);
+  const [jokerSelection, setJokerSelection] = useState<Partial<Record<JokerType, number>>>({});
 
   // Auto-remplissage du dernier nom utilisé depuis localStorage
   useEffect(() => {
@@ -306,6 +316,30 @@ export default function MultiplayerHomeScreen({
     socketService.emit('randomize-teams', { gameId: currentGame.id });
   };
 
+  // Pré-remplit la sélection locale si le joueur a déjà un stock (reconnexion)
+  useEffect(() => {
+    if (currentPlayer?.jokerStock && Object.keys(jokerSelection).length === 0) {
+      setJokerSelection(currentPlayer.jokerStock);
+    }
+  }, [currentPlayer?.jokerStock]);
+
+  const jokerSelectionSum = JOKER_TYPES.reduce((acc, type) => acc + (jokerSelection[type] || 0), 0);
+
+  const handleAdjustJoker = (type: JokerType, delta: number) => {
+    setJokerSelection((prev) => {
+      const current = prev[type] || 0;
+      const next = Math.max(0, Math.min(2, current + delta));
+      const sumWithoutThis = JOKER_TYPES.reduce((acc, t) => acc + (t === type ? 0 : (prev[t] || 0)), 0);
+      if (sumWithoutThis + next > 3) return prev;
+      return { ...prev, [type]: next };
+    });
+  };
+
+  const handleConfirmJokerSelection = () => {
+    if (!currentGame || jokerSelectionSum !== 3) return;
+    socketService.emit('select-jokers', { gameId: currentGame.id, selection: jokerSelection });
+  };
+
   // Si une partie est créée/rejointe mais pas encore démarrée
   if (currentGame && currentPlayer && currentGame.status === 'waiting') {
     const isHost = currentGame.players[0].id === currentPlayer.id;
@@ -469,6 +503,56 @@ export default function MultiplayerHomeScreen({
                     <span className="settings-value">{currentGame.settings.jokersEnabled ? 'On' : 'Off'}</span>
                   )}
                 </div>
+                {currentGame.settings.jokersEnabled && (
+                  <div className="settings-row">
+                    <span className="settings-label">Sélection jokers</span>
+                    {isHost ? (
+                      <div className="mode-selector settings-choice">
+                        <button
+                          type="button"
+                          className={`mode-btn ${currentGame.settings.jokerSelectionMode === 'manuelle' ? 'active' : ''}`}
+                          onClick={() => handleUpdateSetting({ jokerSelectionMode: 'manuelle' })}
+                        >
+                          Manuelle
+                        </button>
+                        <button
+                          type="button"
+                          className={`mode-btn ${currentGame.settings.jokerSelectionMode === 'aleatoire' ? 'active' : ''}`}
+                          onClick={() => handleUpdateSetting({ jokerSelectionMode: 'aleatoire' })}
+                        >
+                          Aléatoire
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="settings-value">
+                        {currentGame.settings.jokerSelectionMode === 'manuelle' ? 'Manuelle' : 'Aléatoire'}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="settings-row">
+                  <span className="settings-label">Indices visibles</span>
+                  {isHost ? (
+                    <div className="mode-selector settings-choice">
+                      <button
+                        type="button"
+                        className={`mode-btn ${!currentGame.settings.hintsEnabled ? 'active' : ''}`}
+                        onClick={() => handleUpdateSetting({ hintsEnabled: false })}
+                      >
+                        Off
+                      </button>
+                      <button
+                        type="button"
+                        className={`mode-btn ${currentGame.settings.hintsEnabled ? 'active' : ''}`}
+                        onClick={() => handleUpdateSetting({ hintsEnabled: true })}
+                      >
+                        On
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="settings-value">{currentGame.settings.hintsEnabled ? 'On' : 'Off'}</span>
+                  )}
+                </div>
                 <div className="settings-row">
                   <span className="settings-label">Teams</span>
                   {isHost ? (
@@ -550,6 +634,44 @@ export default function MultiplayerHomeScreen({
                   </>
                 )}
               </div>
+
+              {currentGame.settings.jokersEnabled && currentGame.settings.jokerSelectionMode === 'manuelle' && (
+                <div className="settings-section mt-3">
+                  <h3 className="waiting-title">Vos jokers ({jokerSelectionSum}/3)</h3>
+                  <div className="joker-select-grid">
+                    {JOKER_TYPES.map((type) => (
+                      <div key={type} className="joker-select-item">
+                        <span className="joker-select-label">{JOKER_LABELS[type]}</span>
+                        <div className="joker-select-controls">
+                          <button
+                            type="button"
+                            className="joker-adjust-btn"
+                            onClick={() => handleAdjustJoker(type, -1)}
+                          >
+                            -
+                          </button>
+                          <span className="joker-select-count">{jokerSelection[type] || 0}</span>
+                          <button
+                            type="button"
+                            className="joker-adjust-btn"
+                            onClick={() => handleAdjustJoker(type, 1)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary w-full mt-2"
+                    onClick={handleConfirmJokerSelection}
+                    disabled={jokerSelectionSum !== 3}
+                  >
+                    {jokerSelectionSum === 3 ? 'Confirmer ma sélection' : `Choisissez encore ${3 - jokerSelectionSum}`}
+                  </button>
+                </div>
+              )}
 
               {isHost && (
                 <div className="waiting-actions mt-3">

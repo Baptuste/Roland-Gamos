@@ -1,6 +1,11 @@
 import { Game, GameStatus, createGame, CanonicalArtist, getTeamIds } from '../types/Game';
-import { Player } from '../types/Player';
+import { Player, JokerType } from '../types/Player';
 import { Turn, createTurn, InvalidReason } from '../types/Turn';
+
+/**
+ * Jokers dont l'effet ajoute du temps au tour en cours.
+ */
+const TIMER_JOKER_BONUS_MS = 15000;
 import { gameDataStore } from './GameDataStore';
 
 /**
@@ -157,6 +162,7 @@ export class GameService {
       ...game,
       currentTurnEndsAt: now + game.settings.turnDurationMs,
       attemptsUsed: 0,
+      turnJokerState: {},
     };
   }
 
@@ -400,13 +406,32 @@ export class GameService {
 
     // 12) Proposition valide - accepter
     const canonicalId = this.getCanonicalId(validation.canonical);
-    const updatedGame = this.moveToNextPlayer({
+    const gameAfterMove = {
       ...game,
       turns: [...game.turns, createTurn(playerId, normalizedArtistName, true, attemptsUsed, validation.source)],
       lastArtist: validation.canonical,
       lastArtistName: validation.canonical.name, // Legacy
       usedArtists: [...game.usedArtists, canonicalId],
-    });
+    };
+
+    // Joker Combo actif et 1er artiste du tour validé : le joueur enchaîne
+    // immédiatement un 2e artiste sans que la main ne passe (comboArtistsPlayed
+    // passe à 1, en attente du 2e coup du même joueur — voir CLAUDE_3.md §7.2).
+    if (game.turnJokerState?.comboArtistsPlayed === 0) {
+      const comboGame = {
+        ...gameAfterMove,
+        attemptsUsed: 0,
+        turnJokerState: { ...gameAfterMove.turnJokerState, comboArtistsPlayed: 1 },
+      };
+      return {
+        isValid: true,
+        turn: createTurn(playerId, normalizedArtistName, true, attemptsUsed, validation.source),
+        game: comboGame,
+        message: `Premier artiste du combo validé ("${validation.canonical.name}"), proposez le second !`,
+      };
+    }
+
+    const updatedGame = this.moveToNextPlayer(gameAfterMove);
 
     // Démarrer le tour suivant
     const finalGame = this.startTurn(updatedGame);
@@ -536,6 +561,13 @@ export class GameService {
    * Public pour permettre à GameManager de l'utiliser lors des timeouts.
    */
   eliminatePlayer(game: Game, playerId: string, reason?: InvalidReason): Game {
+    // Joker Bouclier armé ce tour-ci : absorbe l'élimination, rien ne change.
+    // Se réinitialise naturellement au tour suivant (startTurn remet
+    // turnJokerState à {}), donc protection à usage unique garantie.
+    if (game.turnJokerState?.shieldActive) {
+      return game;
+    }
+
     if (game.settings.teamsEnabled) {
       return this.eliminatePlayerTeamMode(game, playerId);
     }
@@ -628,6 +660,10 @@ export class GameService {
    * ou non (maxLives > 1).
    */
   lifeLossMessage(damagedGame: Game, playerId: string, playerName: string): string {
+    if (damagedGame.turnJokerState?.shieldActive) {
+      return `${playerName} active son Bouclier — élimination absorbée, aucune vie perdue.`;
+    }
+
     const player = damagedGame.players.find(p => p.id === playerId);
 
     if (damagedGame.settings.teamsEnabled && damagedGame.settings.eliminationMode === 'erreurs' && player?.teamId) {
@@ -639,6 +675,135 @@ export class GameService {
     if (!player || player.isEliminated) return `${playerName} est éliminé${damagedGame.settings.teamsEnabled ? ', son équipe continue si un coéquipier est encore actif.' : '.'}`;
     const lives = player.livesRemaining;
     return `${playerName} perd une vie (${lives} restante${lives > 1 ? 's' : ''}).`;
+  }
+
+  /**
+   * Vérifie que le joueur peut activer ce joker (son tour, partie en cours,
+   * stock disponible) et décrémente le stock. Retourne null si invalide —
+   * charge à l'appelant (GameManager) de traduire ça en erreur socket.
+   */
+  private consumeJoker(game: Game, playerId: string, jokerType: JokerType): Game | null {
+    if (!game.settings.jokersEnabled) return null;
+    if (game.status !== GameStatus.IN_PROGRESS) return null;
+    const currentPlayer = game.players[game.currentPlayerIndex];
+    if (!currentPlayer || currentPlayer.id !== playerId) return null;
+    const stock = currentPlayer.jokerStock?.[jokerType] ?? 0;
+    if (stock <= 0) return null;
+
+    return {
+      ...game,
+      players: game.players.map((p) =>
+        p.id === playerId
+          ? { ...p, jokerStock: { ...p.jokerStock, [jokerType]: stock - 1 } }
+          : p
+      ),
+    };
+  }
+
+  /**
+   * Joker Timer : +15s au tour en cours.
+   */
+  useTimerJoker(game: Game, playerId: string): Game | null {
+    const consumed = this.consumeJoker(game, playerId, 'timer');
+    if (!consumed) return null;
+    return {
+      ...consumed,
+      currentTurnEndsAt: (consumed.currentTurnEndsAt ?? Date.now()) + TIMER_JOKER_BONUS_MS,
+    };
+  }
+
+  /**
+   * Joker Skip : passe son tour sans élimination. Compte comme un tour
+   * "joué" pour la rotation (classique ou par équipe) — aucun traitement
+   * spécial, mêmes moveToNextPlayer/startTurn qu'un coup normal.
+   */
+  useSkipJoker(game: Game, playerId: string): Game | null {
+    const consumed = this.consumeJoker(game, playerId, 'skip');
+    if (!consumed) return null;
+
+    const turn = createTurn(playerId, '', true, undefined, undefined, undefined, 'skip');
+    const gameWithTurn = { ...consumed, turns: [...consumed.turns, turn] };
+    const advancedGame = this.moveToNextPlayer(gameWithTurn);
+    return advancedGame.status === GameStatus.IN_PROGRESS ? this.startTurn(advancedGame) : advancedGame;
+  }
+
+  /**
+   * Joker Bouclier : armé pour ce tour, absorbe la prochaine élimination
+   * (voir eliminatePlayer). Activation préventive avant de proposer — pari
+   * sur son propre coup.
+   */
+  useBouclierJoker(game: Game, playerId: string): Game | null {
+    const consumed = this.consumeJoker(game, playerId, 'bouclier');
+    if (!consumed) return null;
+    return {
+      ...consumed,
+      turnJokerState: { ...consumed.turnJokerState, shieldActive: true },
+    };
+  }
+
+  /**
+   * Joker Combo : active l'enchaînement de 2 artistes dans le même tour
+   * (voir proposeArtist étape 12). comboArtistsPlayed=0 = en attente du 1er.
+   */
+  useComboJoker(game: Game, playerId: string): Game | null {
+    const consumed = this.consumeJoker(game, playerId, 'combo');
+    if (!consumed) return null;
+    return {
+      ...consumed,
+      turnJokerState: { ...consumed.turnJokerState, comboArtistsPlayed: 0 },
+    };
+  }
+
+  /**
+   * Joker Archives : révèle l'historique complet des artistes de la partie
+   * pour ce joueur, pendant son tour uniquement (utile surtout si
+   * settings.hintsEnabled=false — sinon l'historique est déjà visible).
+   */
+  useArchivesJoker(game: Game, playerId: string): Game | null {
+    const consumed = this.consumeJoker(game, playerId, 'archives');
+    if (!consumed) return null;
+    return {
+      ...consumed,
+      turnJokerState: { ...consumed.turnJokerState, archivesRevealedPlayerId: playerId },
+    };
+  }
+
+  /**
+   * Joker Résurrection : ressuscite un joueur éliminé avec 1 vie. Cible un
+   * coéquipier uniquement si teamsEnabled (refuse une cible d'une autre
+   * équipe) ; en classique, cible libre parmi les joueurs éliminés. En mode
+   * ERREURS, remonte aussi le pool d'équipe à 1 s'il était épuisé (sinon la
+   * ressuscitée retomberait immédiatement à la prochaine erreur du groupe).
+   */
+  useResurrectionJoker(game: Game, playerId: string, targetPlayerId: string): Game | null {
+    const consumed = this.consumeJoker(game, playerId, 'resurrection');
+    if (!consumed) return null;
+
+    const activator = consumed.players.find((p) => p.id === playerId);
+    const target = consumed.players.find((p) => p.id === targetPlayerId);
+    if (!target || !target.isEliminated) return null;
+
+    if (consumed.settings.teamsEnabled) {
+      if (!activator?.teamId || target.teamId !== activator.teamId) return null;
+    }
+
+    const updatedPlayers = consumed.players.map((p) =>
+      p.id === targetPlayerId ? { ...p, isEliminated: false, livesRemaining: 1 } : p
+    );
+
+    let teamErrorsRemaining = consumed.teamErrorsRemaining;
+    if (consumed.settings.teamsEnabled && consumed.settings.eliminationMode === 'erreurs' && target.teamId) {
+      const currentPool = teamErrorsRemaining?.[target.teamId] ?? 0;
+      if (currentPool <= 0) {
+        teamErrorsRemaining = { ...(teamErrorsRemaining || {}), [target.teamId]: 1 };
+      }
+    }
+
+    return {
+      ...consumed,
+      players: updatedPlayers,
+      teamErrorsRemaining,
+    };
   }
 
   /**

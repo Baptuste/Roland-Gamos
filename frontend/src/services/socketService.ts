@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { Game, Player, GameSettings } from '../shared/types';
+import { Game, Player, GameSettings, JokerType } from '../shared/types';
 
 // Détecter automatiquement l'URL du serveur
 // En production (Railway), le frontend est servi par le même serveur, donc utiliser l'URL relative
@@ -35,6 +35,9 @@ export interface SocketEvents {
   'toggle-ready': (data: { gameId: string }) => void;
   'assign-team': (data: { gameId: string; targetPlayerId: string; teamId: string }) => void;
   'randomize-teams': (data: { gameId: string }) => void;
+  'select-jokers': (data: { gameId: string; selection: Partial<Record<JokerType, number>> }) => void;
+  'use-joker': (data: { gameId: string; jokerType: JokerType }) => void;
+  'use-joker-on-target': (data: { gameId: string; jokerType: 'resurrection'; targetPlayerId: string }) => void;
 
   // Événements reçus du serveur
   'game-created': (data: { gameId: string; gameCode: string; player: Player; game: Game }) => void;

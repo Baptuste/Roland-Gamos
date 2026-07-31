@@ -1,11 +1,13 @@
 import { Server, Socket } from 'socket.io';
 import { GameManager } from './GameManager';
 import { Game, GameStatus, GameSettings } from '../types/Game';
+import { JokerType } from '../types/Player';
 
 const ALLOWED_TURN_DURATIONS_MS = [15000, 30000, 60000];
 const ALLOWED_MAX_LIVES = [1, 2, 3];
 const ALLOWED_TEAM_COUNTS = [2, 3, 4];
 const ALLOWED_ELIMINATION_MODES = ['vies', 'erreurs'];
+const ALLOWED_JOKER_SELECTION_MODES = ['manuelle', 'aleatoire'];
 
 /**
  * Valide/filtre les réglages reçus du client — n'accepte que des valeurs
@@ -32,6 +34,12 @@ function sanitizeSettings(raw: unknown): Partial<GameSettings> {
   }
   if (ALLOWED_ELIMINATION_MODES.includes(input.eliminationMode as string)) {
     settings.eliminationMode = input.eliminationMode;
+  }
+  if (ALLOWED_JOKER_SELECTION_MODES.includes(input.jokerSelectionMode as string)) {
+    settings.jokerSelectionMode = input.jokerSelectionMode;
+  }
+  if (typeof input.hintsEnabled === 'boolean') {
+    settings.hintsEnabled = input.hintsEnabled;
   }
   return settings;
 }
@@ -140,6 +148,80 @@ export function setupSocketHandlers(io: Server, gameManager: GameManager) {
         io.to(data.gameId).emit('game-state', { game, gameCode: gameManager.getGameCode(data.gameId) });
       } catch (error) {
         socket.emit('error', { message: 'Erreur lors de la réassignation des équipes' });
+      }
+    });
+
+    // Sélectionner ses 3 jokers (mode manuel, lobby en attente, pas host-only)
+    socket.on('select-jokers', (data: { gameId: string; selection: Partial<Record<JokerType, number>> }) => {
+      try {
+        const playerInfo = gameManager.getPlayerBySocket(socket.id);
+        if (!playerInfo) {
+          socket.emit('error', { message: 'Joueur non trouvé' });
+          return;
+        }
+
+        const game = gameManager.selectJokers(data.gameId, playerInfo.playerId, data.selection);
+        if (!game) {
+          socket.emit('error', { message: 'Sélection de jokers invalide' });
+          return;
+        }
+
+        io.to(data.gameId).emit('game-state', { game, gameCode: gameManager.getGameCode(data.gameId) });
+      } catch (error) {
+        socket.emit('error', { message: 'Erreur lors de la sélection des jokers' });
+      }
+    });
+
+    // Activer un joker sur soi-même (Timer/Skip/Bouclier/Combo/Archives)
+    socket.on('use-joker', (data: { gameId: string; jokerType: JokerType }) => {
+      try {
+        const playerInfo = gameManager.getPlayerBySocket(socket.id);
+        if (!playerInfo) {
+          socket.emit('error', { message: 'Joueur non trouvé' });
+          return;
+        }
+
+        const game = gameManager.useJoker(data.gameId, playerInfo.playerId, data.jokerType);
+        if (!game) {
+          socket.emit('error', { message: 'Impossible d\'activer ce joker' });
+          return;
+        }
+
+        const playerName = game.players.find((p) => p.id === playerInfo.playerId)?.name || 'Un joueur';
+        io.to(data.gameId).emit('game-updated', {
+          game,
+          message: `${playerName} a activé le joker ${data.jokerType}.`,
+          isValid: true,
+        });
+      } catch (error) {
+        socket.emit('error', { message: 'Erreur lors de l\'activation du joker' });
+      }
+    });
+
+    // Activer le joker Résurrection sur une cible
+    socket.on('use-joker-on-target', (data: { gameId: string; jokerType: 'resurrection'; targetPlayerId: string }) => {
+      try {
+        const playerInfo = gameManager.getPlayerBySocket(socket.id);
+        if (!playerInfo) {
+          socket.emit('error', { message: 'Joueur non trouvé' });
+          return;
+        }
+
+        const game = gameManager.useJoker(data.gameId, playerInfo.playerId, data.jokerType, data.targetPlayerId);
+        if (!game) {
+          socket.emit('error', { message: 'Impossible d\'activer ce joker sur cette cible' });
+          return;
+        }
+
+        const activatorName = game.players.find((p) => p.id === playerInfo.playerId)?.name || 'Un joueur';
+        const targetName = game.players.find((p) => p.id === data.targetPlayerId)?.name || 'un coéquipier';
+        io.to(data.gameId).emit('game-updated', {
+          game,
+          message: `${activatorName} a ressuscité ${targetName} !`,
+          isValid: true,
+        });
+      } catch (error) {
+        socket.emit('error', { message: 'Erreur lors de l\'activation du joker' });
       }
     });
 

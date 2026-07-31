@@ -8,7 +8,7 @@ describe('GameService — système de vies (lobby Phase A)', () => {
   it('un joueur avec plusieurs vies ne devient éliminé qu\'à sa dernière vie', () => {
     const p1 = createPlayer('p1', 'Alice', 2);
     const p2 = createPlayer('p2', 'Bob', 2);
-    let game = createGame('g1', [p1, p2], { turnDurationMs: 30000, maxLives: 2, jokersEnabled: false, teamsEnabled: false, teamCount: 2, eliminationMode: 'vies' });
+    let game = createGame('g1', [p1, p2], { turnDurationMs: 30000, maxLives: 2, jokersEnabled: false, teamsEnabled: false, teamCount: 2, eliminationMode: 'vies', jokerSelectionMode: 'aleatoire', hintsEnabled: true });
 
     game = service.eliminatePlayer(game, 'p1', 'REPEAT');
     const afterFirstHit = game.players.find(p => p.id === 'p1')!;
@@ -37,7 +37,7 @@ describe('GameService — système de vies (lobby Phase A)', () => {
     const p1 = createPlayer('p1', 'Alice', 2);
     const p2 = createPlayer('p2', 'Bob', 2);
     const p3 = createPlayer('p3', 'Carol', 2);
-    let game = createGame('g3', [p1, p2, p3], { turnDurationMs: 30000, maxLives: 2, jokersEnabled: false, teamsEnabled: false, teamCount: 2, eliminationMode: 'vies' });
+    let game = createGame('g3', [p1, p2, p3], { turnDurationMs: 30000, maxLives: 2, jokersEnabled: false, teamsEnabled: false, teamCount: 2, eliminationMode: 'vies', jokerSelectionMode: 'aleatoire', hintsEnabled: true });
     game = service.startGame(game);
     expect(game.currentPlayerIndex).toBe(0);
 
@@ -53,7 +53,7 @@ describe('GameService — système de vies (lobby Phase A)', () => {
   it('startTurn utilise la durée de tour configurée dans game.settings', () => {
     const p1 = createPlayer('p1', 'Alice', 1);
     const p2 = createPlayer('p2', 'Bob', 1);
-    const game = createGame('g4', [p1, p2], { turnDurationMs: 15000, maxLives: 1, jokersEnabled: false, teamsEnabled: false, teamCount: 2, eliminationMode: 'vies' });
+    const game = createGame('g4', [p1, p2], { turnDurationMs: 15000, maxLives: 1, jokersEnabled: false, teamsEnabled: false, teamCount: 2, eliminationMode: 'vies', jokerSelectionMode: 'aleatoire', hintsEnabled: true });
     const started = service.startTurn({ ...game, status: GameStatus.IN_PROGRESS });
     const remaining = (started.currentTurnEndsAt || 0) - Date.now();
     expect(remaining).toBeGreaterThan(14000);

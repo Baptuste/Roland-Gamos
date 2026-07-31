@@ -1,6 +1,6 @@
 import { Server } from 'socket.io';
 import { Game, GameStatus, createGame, GameSettings, DEFAULT_GAME_SETTINGS, getTeamIds } from '../types/Game';
-import { Player, createPlayer } from '../types/Player';
+import { Player, createPlayer, JokerType } from '../types/Player';
 import { GameService } from '../services/GameService';
 import { ProposalResult } from '../services/GameService';
 import { createTurn } from '../types/Turn';
@@ -225,6 +225,20 @@ export class GameManager {
       this.games.set(gameId, gameToStart);
     }
 
+    if (gameToStart.settings.jokersEnabled) {
+      // Aléatoire : tire pour tout le monde. Manuelle : filet de sécurité,
+      // ne complète que les sélections incomplètes (préserve les choix faits
+      // dans le lobby), même esprit que assignTeamsBalanced(onlyUnassigned).
+      const players = gameToStart.players.map((p) => {
+        if (gameToStart.settings.jokerSelectionMode === 'aleatoire' || !this.isCompleteJokerSelection(p.jokerStock)) {
+          return { ...p, jokerStock: this.randomJokerSelection() };
+        }
+        return p;
+      });
+      gameToStart = { ...gameToStart, players };
+      this.games.set(gameId, gameToStart);
+    }
+
     const startedGame = gameService.startGame(gameToStart);
     this.games.set(gameId, startedGame);
 
@@ -346,6 +360,103 @@ export class GameManager {
     }
 
     return result;
+  }
+
+  private static readonly JOKER_TYPES: JokerType[] = ['timer', 'skip', 'combo', 'bouclier', 'archives', 'resurrection'];
+
+  /**
+   * Tire 3 jokers au hasard (max 2 exemplaires du même type — "2x le même
+   * autorisé", pas 3x — voir CLAUDE_3.md §7.2).
+   */
+  private randomJokerSelection(): Partial<Record<JokerType, number>> {
+    const counts: Partial<Record<JokerType, number>> = {};
+    for (let i = 0; i < 3; i++) {
+      const available = GameManager.JOKER_TYPES.filter((t) => (counts[t] ?? 0) < 2);
+      const type = available[Math.floor(Math.random() * available.length)];
+      counts[type] = (counts[type] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  /**
+   * Une sélection de jokers valide/complète somme à 3, sans dépasser 2 par type.
+   */
+  private isCompleteJokerSelection(stock: Partial<Record<JokerType, number>> | undefined): boolean {
+    if (!stock) return false;
+    const values = Object.values(stock) as number[];
+    const sum = values.reduce((a, b) => a + (b || 0), 0);
+    return sum === 3 && values.every((v) => (v ?? 0) <= 2);
+  }
+
+  /**
+   * Enregistre la sélection de jokers d'un joueur (mode manuel, lobby en
+   * attente). Chaque joueur gère son propre stock — pas host-only.
+   */
+  selectJokers(gameId: string, playerId: string, selection: Partial<Record<JokerType, number>>): Game | null {
+    const game = this.games.get(gameId);
+    if (!game) return null;
+    if (game.status !== GameStatus.WAITING) return null;
+    if (!game.settings.jokersEnabled || game.settings.jokerSelectionMode !== 'manuelle') return null;
+    if (!game.players.some((p) => p.id === playerId)) return null;
+
+    const validTypes = Object.keys(selection).every((k) => GameManager.JOKER_TYPES.includes(k as JokerType));
+    if (!validTypes || !this.isCompleteJokerSelection(selection)) return null;
+
+    const updatedGame: Game = {
+      ...game,
+      players: game.players.map((p) => (p.id === playerId ? { ...p, jokerStock: selection } : p)),
+    };
+
+    this.games.set(gameId, updatedGame);
+    return updatedGame;
+  }
+
+  /**
+   * Active un joker pour le joueur courant (délègue à GameService). Reprogramme
+   * le timer serveur après coup — Timer/Skip changent currentTurnEndsAt ou le
+   * joueur courant, et même sans ça reprogrammer au même timeRemaining est
+   * sans effet (même pattern que proposeArtist).
+   */
+  useJoker(gameId: string, playerId: string, jokerType: JokerType, targetPlayerId?: string): Game | null {
+    const game = this.games.get(gameId);
+    const gameService = this.gameServices.get(gameId);
+    if (!game || !gameService) return null;
+
+    let updatedGame: Game | null;
+    switch (jokerType) {
+      case 'timer':
+        updatedGame = gameService.useTimerJoker(game, playerId);
+        break;
+      case 'skip':
+        updatedGame = gameService.useSkipJoker(game, playerId);
+        break;
+      case 'bouclier':
+        updatedGame = gameService.useBouclierJoker(game, playerId);
+        break;
+      case 'combo':
+        updatedGame = gameService.useComboJoker(game, playerId);
+        break;
+      case 'archives':
+        updatedGame = gameService.useArchivesJoker(game, playerId);
+        break;
+      case 'resurrection':
+        updatedGame = targetPlayerId ? gameService.useResurrectionJoker(game, playerId, targetPlayerId) : null;
+        break;
+      default:
+        return null;
+    }
+
+    if (!updatedGame) return null;
+
+    this.games.set(gameId, updatedGame);
+
+    if (updatedGame.status === GameStatus.IN_PROGRESS) {
+      this.scheduleTurnTimer(gameId, updatedGame);
+    } else {
+      this.clearTurnTimer(gameId);
+    }
+
+    return updatedGame;
   }
 
   /**

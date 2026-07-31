@@ -1,16 +1,11 @@
-export interface Jokers {
-  extraTime?: number;
-  skipTurn?: number;
-  hint?: number;
-  attemptBonus?: number;
-}
+export type JokerType = 'timer' | 'skip' | 'combo' | 'bouclier' | 'archives' | 'resurrection';
 
 export interface Player {
   id: string;
   name: string;
   isEliminated: boolean;
   livesRemaining: number;
-  jokers?: Jokers;
+  jokerStock?: Partial<Record<JokerType, number>>;
   teamId?: string;
 }
 

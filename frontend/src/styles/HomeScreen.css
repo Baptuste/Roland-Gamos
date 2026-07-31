@@ -243,6 +243,54 @@
   transition: all 0.15s;
 }
 
+/* Sélection des jokers (lobby, mode manuel) */
+.joker-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5rem;
+}
+
+.joker-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-input);
+  border: 2px solid var(--border);
+  border-radius: 4px;
+}
+
+.joker-select-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.joker-select-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.joker-adjust-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  border: 2px solid var(--primary);
+  background: transparent;
+  color: var(--primary);
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.joker-select-count {
+  font-weight: 700;
+  min-width: 1ch;
+  text-align: center;
+}
+
 /* Réglages du lobby */
 .settings-section {
   padding-top: 1rem;

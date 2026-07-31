@@ -1,3 +1,5 @@
+import { JokerType } from './Player';
+
 export type ValidationSource = 'musicbrainz' | 'wikidata_fallback';
 export type InvalidReason = 'REPEAT' | 'TIMEOUT' | 'NO_RELATION' | 'NOT_FOUND' | 'SINGLE_CIRCULAR' | 'OTHER';
 
@@ -9,6 +11,7 @@ export interface Turn {
   attemptNumber?: number;
   validationSource?: ValidationSource;
   invalidReason?: InvalidReason;
+  jokerUsed?: JokerType;
 }
 
 export function createTurn(

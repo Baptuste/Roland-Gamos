@@ -1,12 +1,7 @@
 /**
- * Jokers disponibles pour un joueur (future-proof)
+ * Les 6 jokers du mode Multijoueur — voir CLAUDE_3.md §7.2 / BRIEF_SESSION_1.md §5.
  */
-export interface Jokers {
-  extraTime?: number;
-  skipTurn?: number;
-  hint?: number;
-  attemptBonus?: number;
-}
+export type JokerType = 'timer' | 'skip' | 'combo' | 'bouclier' | 'archives' | 'resurrection';
 
 /**
  * Représente un joueur dans une partie
@@ -16,7 +11,12 @@ export interface Player {
   name: string;
   isEliminated: boolean;
   livesRemaining: number;
-  jokers?: Jokers;
+  /**
+   * Stock de jokers restants par type. Pendant le lobby (settings.jokerSelectionMode
+   * === 'manuelle'), représente la sélection en cours (doit sommer à 3, max 2/type
+   * avant le lancement) ; en jeu, décrémenté à chaque utilisation.
+   */
+  jokerStock?: Partial<Record<JokerType, number>>;
   teamId?: string; // pertinent seulement si settings.teamsEnabled (voir types/Game.ts)
 }
 
@@ -30,6 +30,5 @@ export function createPlayer(id: string, name: string, maxLives: number = 1): Pl
     name,
     isEliminated: false,
     livesRemaining: maxLives,
-    jokers: {},
   };
 }

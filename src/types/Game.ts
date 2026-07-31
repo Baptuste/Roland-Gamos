@@ -28,7 +28,9 @@ export interface CanonicalArtist {
 export interface GameSettings {
   turnDurationMs: number; // 15000 | 30000 | 60000
   maxLives: number;       // 1 | 2 | 3
-  jokersEnabled: boolean; // stocké, aucune mécanique branchée pour l'instant
+  jokersEnabled: boolean;
+  jokerSelectionMode: 'manuelle' | 'aleatoire'; // pertinent seulement si jokersEnabled
+  hintsEnabled: boolean;  // Aide (collabs connues) + Historique visibles par défaut
   teamsEnabled: boolean;
   teamCount: number;      // 2 | 3 | 4, pertinent seulement si teamsEnabled
   eliminationMode: 'vies' | 'erreurs'; // pertinent seulement si teamsEnabled — voir CLAUDE_3.md §7.1
@@ -38,6 +40,8 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   turnDurationMs: 30000,
   maxLives: 1,
   jokersEnabled: false,
+  jokerSelectionMode: 'aleatoire',
+  hintsEnabled: true,
   teamsEnabled: false,
   teamCount: 2,
   eliminationMode: 'vies',
@@ -63,6 +67,16 @@ export interface Game {
   // Mode équipe (pertinents seulement si settings.teamsEnabled)
   teamErrorsRemaining?: Record<string, number>;   // teamId -> pool d'erreurs partagé restant (mode ERREURS)
   teamNextMemberIndex?: Record<string, number>;   // teamId -> index du prochain membre à jouer (rotation round-robin)
+
+  /**
+   * État éphémère des jokers pour le tour courant, réinitialisé à chaque
+   * startTurn (même esprit que attemptsUsed) — voir CLAUDE_3.md §7.2.
+   */
+  turnJokerState?: {
+    shieldActive?: boolean;           // Bouclier armé pour ce tour
+    comboArtistsPlayed?: number;      // Combo actif : 0 = en attente du 1er artiste validé, 1 = en attente du 2e
+    archivesRevealedPlayerId?: string; // joueur ayant activé Archives ce tour (historique visible pour lui seul)
+  };
 }
 
 /**

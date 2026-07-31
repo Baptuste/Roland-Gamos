@@ -16,7 +16,7 @@ describe('GameService — mode équipe (Phase B)', () => {
 
     let game = createGame('g1', [alice, bob, carol], {
       turnDurationMs: 30000, maxLives: 2, jokersEnabled: false,
-      teamsEnabled: true, teamCount: 2, eliminationMode: 'vies',
+      teamsEnabled: true, teamCount: 2, eliminationMode: 'vies', jokerSelectionMode: 'aleatoire', hintsEnabled: true,
     });
     game = service.startGame(game);
     expect(game.players[game.currentPlayerIndex].name).toBe('Alice');
@@ -49,7 +49,7 @@ describe('GameService — mode équipe (Phase B)', () => {
 
     let game = createGame('g5', [alice, bob, carol], {
       turnDurationMs: 30000, maxLives: 2, jokersEnabled: false,
-      teamsEnabled: true, teamCount: 2, eliminationMode: 'vies',
+      teamsEnabled: true, teamCount: 2, eliminationMode: 'vies', jokerSelectionMode: 'aleatoire', hintsEnabled: true,
     });
     game = service.startGame(game); // Alice (team-0) joue en premier
 
@@ -68,7 +68,7 @@ describe('GameService — mode équipe (Phase B)', () => {
 
     let game = createGame('g2', [alice, bob, carol, dave], {
       turnDurationMs: 30000, maxLives: 1, jokersEnabled: false,
-      teamsEnabled: true, teamCount: 2, eliminationMode: 'vies',
+      teamsEnabled: true, teamCount: 2, eliminationMode: 'vies', jokerSelectionMode: 'aleatoire', hintsEnabled: true,
     });
     game = service.startGame(game);
 
@@ -86,7 +86,7 @@ describe('GameService — mode équipe (Phase B)', () => {
 
     let game = createGame('g4', [alice, bob], {
       turnDurationMs: 30000, maxLives: 2, jokersEnabled: false,
-      teamsEnabled: true, teamCount: 2, eliminationMode: 'vies',
+      teamsEnabled: true, teamCount: 2, eliminationMode: 'vies', jokerSelectionMode: 'aleatoire', hintsEnabled: true,
     });
     game = service.startGame(game);
 
@@ -104,7 +104,7 @@ describe('GameService — mode équipe (Phase B)', () => {
 
     let game = createGame('g3', [alice, bob, carol, dave], {
       turnDurationMs: 30000, maxLives: 3, jokersEnabled: false,
-      teamsEnabled: true, teamCount: 2, eliminationMode: 'erreurs',
+      teamsEnabled: true, teamCount: 2, eliminationMode: 'erreurs', jokerSelectionMode: 'aleatoire', hintsEnabled: true,
     });
     game = service.startGame(game);
     game = { ...game, teamErrorsRemaining: { 'team-0': 3, 'team-1': 3 } };

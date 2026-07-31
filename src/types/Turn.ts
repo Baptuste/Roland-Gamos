@@ -8,6 +8,8 @@ export type ValidationSource = 'musicbrainz' | 'wikidata_fallback' | 'local_stor
  */
 export type InvalidReason = 'REPEAT' | 'TIMEOUT' | 'NO_RELATION' | 'NOT_FOUND' | 'SINGLE_CIRCULAR' | 'OTHER';
 
+import { JokerType } from './Player';
+
 /**
  * Représente un tour de jeu
  */
@@ -19,6 +21,7 @@ export interface Turn {
   attemptNumber?: number;
   validationSource?: ValidationSource;
   invalidReason?: InvalidReason;
+  jokerUsed?: JokerType; // joker activé pendant ce tour (ex: Skip), pour affichage historique
 }
 
 /**
@@ -30,7 +33,8 @@ export function createTurn(
   isValid: boolean,
   attemptNumber?: number,
   validationSource?: ValidationSource,
-  invalidReason?: InvalidReason
+  invalidReason?: InvalidReason,
+  jokerUsed?: JokerType
 ): Turn {
   return {
     playerId,
@@ -40,5 +44,6 @@ export function createTurn(
     attemptNumber,
     validationSource,
     invalidReason,
+    jokerUsed,
   };
 }
