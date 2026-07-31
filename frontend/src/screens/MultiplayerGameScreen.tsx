@@ -5,6 +5,8 @@ import { GameService } from '../shared/services/GameService';
 import { useArtistAutocomplete } from '../hooks/useArtistAutocomplete';
 import '../styles/GameScreen.css';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+
 interface MultiplayerGameScreenProps {
   game: Game;
   currentPlayerId: string;
@@ -27,6 +29,8 @@ export default function MultiplayerGameScreen({
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const { suggestions, clear: clearSuggestions } = useArtistAutocomplete(artistName);
+  const [hints, setHints] = useState<string[]>([]);
+  const [showHints, setShowHints] = useState(false);
 
   const gameService = new GameService();
   const currentPlayer = gameService.getCurrentPlayer(game);
@@ -54,6 +58,23 @@ export default function MultiplayerGameScreen({
 
     return () => clearInterval(interval);
   }, [game.currentTurnEndsAt, game.status]);
+
+  // Réinitialiser les hints quand l'artiste précédent change
+  useEffect(() => {
+    setHints([]);
+    setShowHints(false);
+  }, [game.lastArtistName]);
+
+  const loadHints = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/multiplayer/hint/${game.id}`);
+      const data = await res.json();
+      setHints(data.hints || []);
+      setShowHints(true);
+    } catch {
+      setHints([]);
+    }
+  };
 
   useEffect(() => {
     // Écouter les mises à jour de la partie
@@ -290,6 +311,39 @@ export default function MultiplayerGameScreen({
                     {isSubmitting ? 'Validation...' : 'Proposer'}
                   </button>
                 </form>
+                {game.lastArtistName && (
+                  <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+                    {!showHints ? (
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.75rem', padding: '0.3rem 0.8rem' }}
+                        onClick={loadHints}
+                        type="button"
+                      >
+                        💡 Aide (collabs connues)
+                      </button>
+                    ) : hints.length > 0 ? (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>Collabs connues :</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'center' }}>
+                          {hints.map((h) => (
+                            <button
+                              key={h}
+                              className="btn btn-secondary"
+                              style={{ fontSize: '0.7rem', padding: '0.2rem 0.6rem' }}
+                              onClick={() => setArtistName(h as string)}
+                              type="button"
+                            >
+                              {h}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Aucune collab connue dans la base</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

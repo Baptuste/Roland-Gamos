@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { socketService } from '../services/socketService';
-import { Game, Player } from '../shared/types';
+import { Game, Player, GameSettings } from '../shared/types';
 import '../styles/HomeScreen.css';
 
 interface MultiplayerHomeScreenProps {
@@ -74,8 +74,8 @@ export default function MultiplayerHomeScreen({
     // Se connecter au serveur
     socketService.connect();
 
-    // Écouter les événements
-    socketService.on('game-created', (data) => {
+    // Écouter les événements (handlers nommés partout, pour un cleanup .off() qui fonctionne réellement)
+    const handleGameCreated = (data: { gameId: string; gameCode: string; player: Player; game: Game }) => {
       setCurrentPlayer(data.player);
       setCurrentGame(data.game);
       setCreatedGameCode(data.gameCode);
@@ -85,9 +85,9 @@ export default function MultiplayerHomeScreen({
       // App.tsx affichera MultiplayerGameScreen mais on reste dans le salon d'attente
       // car on vérifie le statut 'waiting' dans le rendu
       onGameJoined(data.game, data.player, data.gameCode);
-    });
+    };
 
-    socketService.on('game-reconnected', (data) => {
+    const handleGameReconnected = (data: { player: Player; game: Game }) => {
       setCurrentPlayer(data.player);
       setCurrentGame(data.game);
       setIsConnecting(false);
@@ -98,9 +98,9 @@ export default function MultiplayerHomeScreen({
         setCreatedGameCode(storedCode);
       }
       onGameJoined(data.game, data.player, storedCode || undefined);
-    });
+    };
 
-    socketService.on('game-reset', (data) => {
+    const handleGameReset = (data: { game: Game; gameCode: string }) => {
       // Logs réduits pour éviter la pollution de la console
       setCurrentGame(data.game);
       if (data.gameCode) {
@@ -124,7 +124,7 @@ export default function MultiplayerHomeScreen({
         }
         return prevPlayer;
       });
-    });
+    };
 
     const handleGameCode = (data: { gameId: string; gameCode: string }) => {
       setCurrentGame((prevGame) => {
@@ -147,18 +147,15 @@ export default function MultiplayerHomeScreen({
       });
     };
 
-    socketService.on('game-code', handleGameCode);
-    socketService.on('game-state', handleGameState);
-
-    socketService.on('game-joined', (data) => {
+    const handleGameJoined = (data: { player: Player; game: Game }) => {
       setCurrentPlayer(data.player);
       setCurrentGame(data.game);
       setIsConnecting(false);
       setError(null);
       onGameJoined(data.game, data.player);
-    });
+    };
 
-    socketService.on('player-joined', (data) => {
+    const handlePlayerJoined = (data: { player: Player; game: Game }) => {
       // Logs réduits
       setCurrentGame(data.game);
       // Mettre à jour aussi le joueur actuel si nécessaire
@@ -178,7 +175,7 @@ export default function MultiplayerHomeScreen({
           onGameJoined(data.game, updatedPlayer, createdGameCode || undefined);
         }
       }
-    });
+    };
 
     const handleGameStarted = (data: { game: Game }) => {
       setCurrentGame(data.game);
@@ -204,27 +201,37 @@ export default function MultiplayerHomeScreen({
       });
     };
 
-    socketService.on('game-started', handleGameStarted);
-
-    socketService.on('game-updated', (data) => {
+    const handleGameUpdated = (data: { game: Game }) => {
       setCurrentGame(data.game);
-    });
+    };
 
-    socketService.on('error', (data) => {
+    const handleError = (data: { message: string }) => {
       setError(data.message);
       setIsConnecting(false);
-    });
+    };
+
+    socketService.on('game-created', handleGameCreated);
+    socketService.on('game-reconnected', handleGameReconnected);
+    socketService.on('game-reset', handleGameReset);
+    socketService.on('game-code', handleGameCode);
+    socketService.on('game-state', handleGameState);
+    socketService.on('game-joined', handleGameJoined);
+    socketService.on('player-joined', handlePlayerJoined);
+    socketService.on('game-started', handleGameStarted);
+    socketService.on('game-updated', handleGameUpdated);
+    socketService.on('error', handleError);
 
     return () => {
-      socketService.off('game-created', () => {});
-      socketService.off('game-reset', () => {});
+      socketService.off('game-created', handleGameCreated);
+      socketService.off('game-reconnected', handleGameReconnected);
+      socketService.off('game-reset', handleGameReset);
       socketService.off('game-code', handleGameCode);
-      socketService.off('game-joined', () => {});
-      socketService.off('player-joined', () => {});
-      socketService.off('game-started', handleGameStarted);
-      socketService.off('game-updated', () => {});
       socketService.off('game-state', handleGameState);
-      socketService.off('error', () => {});
+      socketService.off('game-joined', handleGameJoined);
+      socketService.off('player-joined', handlePlayerJoined);
+      socketService.off('game-started', handleGameStarted);
+      socketService.off('game-updated', handleGameUpdated);
+      socketService.off('error', handleError);
     };
   }, [onGameJoined]);
 
@@ -276,6 +283,16 @@ export default function MultiplayerHomeScreen({
     socketService.emit('start-game', { gameId: currentGame.id });
   };
 
+  const handleUpdateSetting = (settings: Partial<GameSettings>) => {
+    if (!currentGame) return;
+    socketService.emit('update-game-settings', { gameId: currentGame.id, settings });
+  };
+
+  const handleToggleReady = () => {
+    if (!currentGame) return;
+    socketService.emit('toggle-ready', { gameId: currentGame.id });
+  };
+
   // Si une partie est créée/rejointe mais pas encore démarrée
   if (currentGame && currentPlayer && currentGame.status === 'waiting') {
     const isHost = currentGame.players[0].id === currentPlayer.id;
@@ -295,22 +312,97 @@ export default function MultiplayerHomeScreen({
             <div className="waiting-section mt-3">
               <h3 className="waiting-title">Joueurs ({currentGame.players.length})</h3>
               <div className="players-waiting-list">
-                {currentGame.players.map((player) => (
-                  <div
-                    key={player.id}
-                    className={`player-waiting-item ${
-                      player.id === currentPlayer.id ? 'player-you' : ''
-                    }`}
-                  >
-                    <span className="player-waiting-name">{player.name}</span>
-                    {player.id === currentPlayer.id && (
-                      <span className="player-you-badge">Vous</span>
-                    )}
-                    {player.id === currentGame.players[0].id && (
-                      <span className="player-host-badge">Hôte</span>
-                    )}
-                  </div>
-                ))}
+                {currentGame.players.map((player) => {
+                  const isPlayerHost = player.id === currentGame.players[0].id;
+                  const isReady = currentGame.readyPlayerIds.includes(player.id);
+                  return (
+                    <div
+                      key={player.id}
+                      className={`player-waiting-item ${
+                        player.id === currentPlayer.id ? 'player-you' : ''
+                      }`}
+                    >
+                      <span className="player-waiting-name">{player.name}</span>
+                      {player.id === currentPlayer.id && (
+                        <span className="player-you-badge">Vous</span>
+                      )}
+                      {isPlayerHost ? (
+                        <span className="player-host-badge">Hôte</span>
+                      ) : (
+                        <span className={`player-ready-badge ${isReady ? 'is-ready' : 'is-waiting'}`}>
+                          {isReady ? 'Prêt' : '...'}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="settings-section mt-3">
+                <h3 className="waiting-title">
+                  {isHost ? 'Paramètres — Hôte uniquement' : 'Paramètres de la partie'}
+                </h3>
+                <div className="settings-row">
+                  <span className="settings-label">Temps par tour</span>
+                  {isHost ? (
+                    <div className="mode-selector settings-choice">
+                      {[15000, 30000, 60000].map((ms) => (
+                        <button
+                          key={ms}
+                          type="button"
+                          className={`mode-btn ${currentGame.settings.turnDurationMs === ms ? 'active' : ''}`}
+                          onClick={() => handleUpdateSetting({ turnDurationMs: ms })}
+                        >
+                          {ms / 1000}s
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="settings-value">{currentGame.settings.turnDurationMs / 1000}s</span>
+                  )}
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Vies</span>
+                  {isHost ? (
+                    <div className="mode-selector settings-choice">
+                      {[1, 2, 3].map((lives) => (
+                        <button
+                          key={lives}
+                          type="button"
+                          className={`mode-btn ${currentGame.settings.maxLives === lives ? 'active' : ''}`}
+                          onClick={() => handleUpdateSetting({ maxLives: lives })}
+                        >
+                          {lives}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="settings-value">{currentGame.settings.maxLives}</span>
+                  )}
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Jokers</span>
+                  {isHost ? (
+                    <div className="mode-selector settings-choice">
+                      <button
+                        type="button"
+                        className={`mode-btn ${!currentGame.settings.jokersEnabled ? 'active' : ''}`}
+                        onClick={() => handleUpdateSetting({ jokersEnabled: false })}
+                      >
+                        Off
+                      </button>
+                      <button
+                        type="button"
+                        className={`mode-btn ${currentGame.settings.jokersEnabled ? 'active' : ''}`}
+                        onClick={() => handleUpdateSetting({ jokersEnabled: true })}
+                      >
+                        On
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="settings-value">{currentGame.settings.jokersEnabled ? 'On' : 'Off'}</span>
+                  )}
+                </div>
               </div>
 
               {isHost && (
@@ -331,9 +423,18 @@ export default function MultiplayerHomeScreen({
               )}
 
               {!isHost && (
-                <p className="waiting-hint mt-3">
-                  En attente que l'hôte démarre la partie...
-                </p>
+                <div className="waiting-actions mt-3">
+                  <button
+                    className={`btn w-full ${currentGame.readyPlayerIds.includes(currentPlayer.id) ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={handleToggleReady}
+                    type="button"
+                  >
+                    {currentGame.readyPlayerIds.includes(currentPlayer.id) ? '✓ Prêt' : 'Prêt ?'}
+                  </button>
+                  <p className="waiting-hint mt-2">
+                    En attente que l'hôte démarre la partie...
+                  </p>
+                </div>
               )}
 
               {/* Bouton Accueil */}

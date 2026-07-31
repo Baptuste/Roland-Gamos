@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fuzzyMatch } from './fuzzyMatch';
 
 /**
  * Artiste dans le store de jeu
@@ -66,27 +67,51 @@ export class GameDataStore {
   private async loadFromSupabase(): Promise<void> {
     console.log('  Loading from Supabase...');
 
-    // Charger les artistes inclus
+    // Charger les artistes inclus (pagination — PostgREST plafonne a 1000 lignes par defaut)
     // Note: artists.id est UUID dans Supabase — on utilise genius_id comme clé interne integer
-    const { data: dbArtists, error: artistError } = await supabase!
-      .from('artists')
-      .select('id, genius_id, name, image_url, category, category_bonus, degree_bonus, collab_degree, status')
-      .in('status', ['included', 'needs_review']);
+    const dbArtists: any[] = [];
+    {
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error: artistError } = await supabase!
+          .from('artists')
+          .select('id, genius_id, name, image_url, category, category_bonus, degree_bonus, collab_degree, status')
+          .in('status', ['included', 'needs_review'])
+          .range(from, from + PAGE_SIZE - 1);
 
-    if (artistError) {
-      console.error('  Supabase artist load error:', artistError.message);
-      console.log('  Falling back to JSON...');
-      this.loadFromJSON();
-      return;
+        if (artistError) {
+          console.error('  Supabase artist load error:', artistError.message);
+          console.log('  Falling back to JSON...');
+          this.loadFromJSON();
+          return;
+        }
+        if (!data || data.length === 0) break;
+        dbArtists.push(...data);
+        if (data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
     }
 
     // Map UUID -> genius_id pour résoudre les FKs des collaborations
     const uuidToGeniusId = new Map<string, number>();
 
-    // Charger les aliases (artist_aliases.artist_id est UUID)
-    const { data: dbAliases } = await supabase!
-      .from('artist_aliases')
-      .select('artist_id, alias');
+    // Charger les aliases (artist_aliases.artist_id est UUID, pagination aussi)
+    const dbAliases: any[] = [];
+    {
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      while (true) {
+        const { data } = await supabase!
+          .from('artist_aliases')
+          .select('artist_id, alias')
+          .range(from, from + PAGE_SIZE - 1);
+        if (!data || data.length === 0) break;
+        dbAliases.push(...data);
+        if (data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+    }
 
     // Index aliases par UUID d'abord, puis on convertira en genius_id
     const aliasMapByUuid = new Map<string, string[]>();
@@ -256,11 +281,18 @@ export class GameDataStore {
   // ============================================================
 
   /**
-   * Resout un artiste par nom (fuzzy match basique: exact + aliases)
+   * Resout un artiste par nom : match exact (+ aliases) d'abord,
+   * puis correction de faute de frappe (distance de Levenshtein bornee,
+   * voir fuzzyMatch.ts) si aucun match exact n'est trouve.
    */
   resolveArtist(name: string): GameArtist | null {
     const normalized = name.trim().toLowerCase();
-    return this.artistsByName.get(normalized) || null;
+    if (!normalized) return null;
+
+    const exact = this.artistsByName.get(normalized);
+    if (exact) return exact;
+
+    return fuzzyMatch(normalized, this.artistsByName);
   }
 
   /**
@@ -304,15 +336,28 @@ export class GameDataStore {
   }
 
   /**
-   * Retourne un artiste seed aleatoire (artistes bien connectes)
+   * Retourne un artiste seed aleatoire (artistes bien connectes).
+   * `filter` optionnel (ex: seuil de categorie) — appele par les modes Solo
+   * uniquement, jamais par le Multijoueur. Si le filtre ne laisse aucun
+   * candidat bien connecte, on relache d'abord le filtre avant le critere
+   * de connectivite, pour ne jamais planter la selection.
    */
-  getRandomSeedArtist(): GameArtist | null {
-    const seeds = Array.from(this.artists.values()).filter(a => {
+  getRandomSeedArtist(filter?: (a: GameArtist) => boolean): GameArtist | null {
+    const wellConnected = (a: GameArtist) => {
       const collabs = this.collaboratorIndex.get(a.id);
-      return collabs && collabs.size >= 5;
-    });
-    if (seeds.length === 0) return this.getRandomArtist();
-    return seeds[Math.floor(Math.random() * seeds.length)];
+      return !!collabs && collabs.size >= 5;
+    };
+
+    const all = Array.from(this.artists.values());
+    const seeds = filter ? all.filter(a => wellConnected(a) && filter(a)) : all.filter(wellConnected);
+    if (seeds.length > 0) return seeds[Math.floor(Math.random() * seeds.length)];
+
+    if (filter) {
+      const filteredOnly = all.filter(filter);
+      if (filteredOnly.length > 0) return filteredOnly[Math.floor(Math.random() * filteredOnly.length)];
+    }
+
+    return this.getRandomArtist();
   }
 
   /**

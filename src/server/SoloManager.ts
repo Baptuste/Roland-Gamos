@@ -3,6 +3,7 @@ import { SoloMove, createSoloMove } from '../types/SoloMove';
 import { CanonicalArtist } from '../types/Game';
 import { gameDataStore } from '../services/GameDataStore';
 import { scoringService, ArtistCategory } from '../services/ScoringService';
+import { meetsMinCategory } from '../config/soloArtistFilter';
 
 const TURN_DURATION_MS = 30000;
 
@@ -23,7 +24,7 @@ export class SoloManager {
   // -------------------------------------------------------
 
   private chooseSeedArtist(): CanonicalArtist {
-    const artist = gameDataStore.getRandomSeedArtist();
+    const artist = gameDataStore.getRandomSeedArtist(a => meetsMinCategory(a.category));
     if (!artist) {
       // Fallback si le store est vide (ne devrait pas arriver)
       return { name: 'Booba' };

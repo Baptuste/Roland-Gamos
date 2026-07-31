@@ -147,6 +147,35 @@ app.get('/api/solo/infinite/hint/:runId', (req: express.Request, res: express.Re
   }
 });
 
+// Hint Multijoueur : retourne quelques artistes valides depuis l'artiste précédent de la partie
+app.get('/api/multiplayer/hint/:gameId', (req: express.Request, res: express.Response) => {
+  try {
+    const game = gameManager.getGame(req.params.gameId);
+    if (!game) return res.status(404).json({ error: 'Partie introuvable' });
+
+    const previousArtist = game.lastArtist || (game.lastArtistName ? { name: game.lastArtistName } : null);
+    if (!previousArtist) return res.json({ hints: [] });
+
+    const gameId = previousArtist.gameId ?? gameDataStore.resolveArtist(previousArtist.name)?.id;
+    if (!gameId) return res.json({ hints: [] });
+
+    const collaboratorIds = gameDataStore.getCollaborators(gameId);
+    const usedSet = new Set(game.usedArtists);
+    const hints = collaboratorIds
+      .filter(id => !usedSet.has(String(id)))
+      .slice(0, 5)
+      .map(id => {
+        const a = gameDataStore.getArtistById(id);
+        return a ? a.name : null;
+      })
+      .filter(Boolean);
+
+    res.json({ hints });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Erreur' });
+  }
+});
+
 // Autocomplete d'artistes
 app.get('/api/artists/search', (req: express.Request, res: express.Response) => {
   const query = (req.query.q as string || '').trim();

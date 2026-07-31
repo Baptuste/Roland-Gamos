@@ -183,10 +183,90 @@ Seeds à ajouter : titre "Dépassement" + aura "Dépassement" (voir §2.3).
 ## 4. Phases non abordées
 
 - **ETL (phase 2)** : rien discuté sur la réécriture de `etl.ts` / `push-to-supabase.ts` au-delà des constats du §1.
-- **Frontend (phase 3)** : rien discuté.
+- **Frontend (phase 3)** : implémentation non commencée, mais un ensemble de décisions UI/UX a été validé en amont (voir §7) — ne pas repartir de zéro ni improviser sur ces points.
 
 ---
 
 ## 5. Environnement de travail (note pour la continuité)
 
 Les décisions ci-dessus ont été prises via un environnement sans accès en écriture au repo réel ni à Supabase (analyse en lecture seule via API GitHub + requêtes SQL exécutées manuellement par l'utilisateur). Le schéma Supabase réel (uuid partout, colonnes mortes sur `collaborations`) a été vérifié par requêtes directes le 2026-07-31 — à revalider si des migrations sont appliquées entre-temps.
+
+---
+
+## 6. Bug `artists.popularity = 0` et filtre de trouvabilité en Solo (2026-07-31)
+
+### Statut du bug `popularity = 0`
+
+**Résolu par abandon, pas par réparation.** `artists.popularity` existe bien en base et vaut `0` pour tous les artistes vérifiés — confirmé par requête directe. Ce n'est pas une régression : `src/jobs/popularity/*` (pipeline `ingestJob` → `scoreJob` → `quantilesJob`, script `npm run popularity:all`) **n'a jamais alimenté cette colonne en prod** (voir constat §1) et a été **supprimé intégralement** dans le cadre de la réécriture backend (commit du 2026-07-31). Rien n'utilise `artists.popularity` dans le code actuel — la colonne reste à `0`, sans impact, et n'a pas vocation à être repeuplée. Ne pas relancer `popularity:all` : le script n'existe plus.
+
+### Filtre de sélection automatique en Solo
+
+**Problème réel identifié :** en jeu, la sélection automatique d'artiste (seed de partie, et choix du bot à chaque tour en Solo vs Bot) tirait au hasard dans tout le pool sans filtrer par notoriété — un artiste très confidentiel pouvait être imposé au joueur sans qu'il l'ait choisi lui-même.
+
+**Solution actée :** filtrer sur `artists.category` (5 paliers, réellement peuplé via `assignCategory()`/`fr_collab_count` — voir §1), pas sur `popularity`. Implémenté dans `src/config/soloArtistFilter.ts` :
+- `SOLO_MIN_ARTIST_CATEGORY` (défaut `'niche'`, configurable via la variable d'env `SOLO_MIN_ARTIST_CATEGORY`) — catégorie minimale en dessous de laquelle un artiste est exclu de la sélection automatique. Défaut : exclut uniquement `'underground'`, le palier le plus confidentiel.
+- Appliqué à `SoloManager.chooseSeedArtist()`, `BotManager.chooseSeedArtist()`, et `BotManager.botChooseArtist()` (choix du bot à chaque tour — c'est la source la plus fréquente de propositions obscures, pas seulement le seed).
+- **Ne s'applique jamais** aux artistes proposés par un joueur humain (Solo comme Multijoueur) — un joueur peut toujours répondre avec un artiste niche s'il le connaît. **Ne touche pas au Multijoueur**, qui n'a aucune sélection automatique d'artiste.
+- Fallback : si aucun candidat ne passe le seuil (ex. un artiste très peu connecté n'a que des collaborateurs `underground`), le filtre se relâche automatiquement plutôt que de bloquer la partie.
+
+**Ajustement du seuil — testé empiriquement (2026-07-31), conclusion : ne pas toucher au seuil par défaut.**
+`category` est un classement **relatif** par quintiles de `fr_collab_count` (5 paliers de ~1714 artistes chacun sur la base actuelle), pas une mesure absolue de notoriété. Test concret : l'artiste `2CheeseMilkShake` (repéré comme nom douteux lors des tests en direct, cf. §7.7-like constat) n'a que **8 collaborations FR recensées**, mais tombe dans la catégorie **`ultra_mainstream`** — le palier le plus haut, faute d'une distribution suffisamment étalée. Conséquence : remonter `SOLO_MIN_ARTIST_CATEGORY` ne changerait rien pour ce cas précis (déjà dans la catégorie la plus élevée), et le pousser jusqu'à exclure `ultra_mainstream` viderait ~80 % du pool de sélection automatique — bien trop agressif. Le seuil reste donc à `niche` (défaut inchangé). Ce cas précis n'est pas une erreur ETL (ses collaborateurs — Busta Flex, DJ Weedim, Biffty — sont de vrais artistes FR reconnus, donc probablement un vrai nom de scène/posse cut), contrairement à l'entrée fusionnée `¥$, Kanye West & Ty Dolla $ign` (3 crédits mergés en un seul artiste) qui, elle, a été exclue manuellement (`status = 'excluded'`, JSON local + Supabase) le 2026-07-31.
+
+**Encore ouvert :**
+- Cas d'un artiste "connu mais niche dans sa catégorie" (ex. tête d'affiche d'un sous-genre) : non traité différemment pour l'instant — le filtre ne regarde que `category`, pas de logique par sous-catégorie/scène.
+- La limite structurelle ci-dessus (catégorisation relative, pas absolue) reste vraie pour tout futur cas similaire à `2CheeseMilkShake` : un filtre par `category` seul ne suffira jamais à garantir "un nom reconnaissable", seulement "pas dans le palier le plus bas du classement interne".
+
+---
+
+## 7. Frontend — décisions actées (non encore implémentées)
+
+Décisions UI/UX validées lors de sessions de design antérieures, consolidées le 2026-07-31 (`Roland-Gamos_Rapport_Ameliorations.md`). Rien de ceci n'est encore construit — **implémentation non commencée** (phase 3, voir §4) — mais à respecter telle quelle une fois la phase Frontend démarrée, pour ne pas repartir de zéro ni improviser.
+
+### 7.1 Lobby multijoueur
+
+**Écran intermédiaire "Planète Rap"** (avant le lobby) : 3 choix — Créer / Rejoindre / Inviter.
+
+**Configuration réservée à l'hôte** (aucune édition possible pour les non-hôtes, résumé en lecture seule) :
+- Temps par tour : 15 / 30 / 60s
+- Vies : 1 / 2 / 3
+- Jokers : on / off
+- Teams : on / off
+- Mode élimination : on / off
+
+**État réel actuel (`MultiplayerHomeScreen.tsx` sur `main`) :** hôte basique, aucune de ces options n'est implémentée — écart confirmé entre spec et code.
+
+### 7.2 Jokers (multijoueur uniquement — aucun en Solo)
+
+- 7 jokers au total, rattachés visuellement à chaque avatar (dans le lobby et en jeu).
+- Liste exhaustive des 7 jokers **pas encore formalisée** — à compléter avant implémentation.
+
+### 7.3 Backgrounds validés par écran
+
+| Écran | Background |
+|---|---|
+| Menu principal | Paris by night pixel art (or + violet, immeubles haussmanniens, lune, néons) |
+| Solo Infini | Studio d'enregistrement bleu nuit + or, voyant REC rouge |
+| Planète Rap (multi) | Tons chauds, enseigne néon "Saturn", table ronde |
+| Ring de Battle (Solo Bot) | Salle de concert, podiums, écran LED VS (sans texte "VS" central), silhouettes de foule |
+| Fin de partie | Podium parisien pixel art, confettis or + violet |
+
+### 7.4 Écrans de jeu validés
+
+- **Solo Infini :** avatar en cabine de studio derrière vitre, timer sur écran console, saisie sur la console, pas de jokers.
+- **Solo Bot :** avatars + score sur podiums, zone de saisie entre les podiums, timer sur écran LED, pas de jokers.
+- **Multijoueur :** avatars isométriques autour d'une table ronde, tablette centrale (saisie + dernier feat + timer), jokers accrochés à chaque avatar.
+
+### 7.5 Flows UI/UX validés
+
+- Accueil : bouton JOUER central, trophée en haut à gauche, réglages en haut à droite.
+- Sélection de mode : 3 cartes horizontales empilées (Solo Infini/violet, Solo Bot/or, Multi/rouge).
+- Profil : tap sur un avatar → profil complet si le sien, lecture seule si adversaire.
+- Fin de partie : 2 étapes (podium → XP + unlocks), boutons REJOUER + ACCUEIL uniquement.
+
+### 7.6 Identité visuelle globale
+
+- Logo R/G, palette dark navy `#06060f` / or `#ffd700` / violet `#9b59ff` / rouge `#ff4444`.
+
+### 7.7 Note sur les branches `claude/elated-zhukovsky` et `claude/modest-herschel`
+
+Un audit externe avait signalé ces deux branches comme potentiellement porteuses de travail non mergé ("Solo vs Bot, écrans Leaderboard/Stats, refonte pixel art"). **Vérifié le 2026-07-31 : ce n'est pas le cas.** Le commit en question (`f67b671`) est déjà un ancêtre de `main`. Les deux branches datent d'avril 2026 (bien avant la réécriture backend de juillet) et ne contiennent, en exclusif, que des fichiers volontairement supprimés cette session (`railway.json`/docs Railway, `jobs/popularity/*`, providers MBID morts). `MultiplayerHomeScreen.tsx` y est identique à `main`. Rien à récupérer — branches obsolètes, sans risque à supprimer.

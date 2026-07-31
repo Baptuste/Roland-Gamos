@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { Game, Player } from '../shared/types';
+import { Game, Player, GameSettings } from '../shared/types';
 
 // Détecter automatiquement l'URL du serveur
 // En production (Railway), le frontend est servi par le même serveur, donc utiliser l'URL relative
@@ -23,7 +23,7 @@ const SERVER_URL = getServerUrl();
 
 export interface SocketEvents {
   // Événements émis par le client
-  'create-game': (data: { playerName: string }) => void;
+  'create-game': (data: { playerName: string; settings?: Partial<GameSettings> }) => void;
   'join-game': (data: { gameCode: string; playerName: string }) => void;
   'start-game': (data: { gameId: string }) => void;
   'reset-game': (data: { gameId: string }) => void;
@@ -31,6 +31,8 @@ export interface SocketEvents {
   'get-game-state': (data: { gameId: string }) => void;
   'get-game-code': (data: { gameId: string }) => void;
   'reconnect-game': (data: { gameCode: string; playerId: string }) => void;
+  'update-game-settings': (data: { gameId: string; settings: Partial<GameSettings> }) => void;
+  'toggle-ready': (data: { gameId: string }) => void;
 
   // Événements reçus du serveur
   'game-created': (data: { gameId: string; gameCode: string; player: Player; game: Game }) => void;

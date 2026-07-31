@@ -4,11 +4,6 @@ import { Turn, createTurn, InvalidReason } from '../types/Turn';
 import { gameDataStore } from './GameDataStore';
 
 /**
- * Durée d'un tour en millisecondes (30 secondes)
- */
-const TURN_DURATION_MS = 30000;
-
-/**
  * Nombre maximum de tentatives par tour
  */
 const MAX_ATTEMPTS_PER_TURN = 2;
@@ -139,7 +134,7 @@ export class GameService {
     const now = Date.now();
     return {
       ...game,
-      currentTurnEndsAt: now + TURN_DURATION_MS,
+      currentTurnEndsAt: now + game.settings.turnDurationMs,
       attemptsUsed: 0,
     };
   }
@@ -213,9 +208,11 @@ export class GameService {
 
     // 4) Vérifier le timer (TIMEOUT)
     if (this.isTurnExpired(game)) {
-      const updatedGame = this.eliminatePlayer(game, playerId, 'TIMEOUT');
+      const damagedGame = this.eliminatePlayer(game, playerId, 'TIMEOUT');
+      const message = `Temps écoulé. ${this.lifeLossMessage(damagedGame, playerId, currentPlayer.name)}`;
       const turn = createTurn(playerId, artistName, false, game.attemptsUsed || 0, undefined, 'TIMEOUT');
-      
+      const updatedGame = this.advanceTurnIfPlaying(damagedGame);
+
       return {
         isValid: false,
         turn,
@@ -223,16 +220,18 @@ export class GameService {
           ...updatedGame,
           turns: [...updatedGame.turns, turn],
         },
-        message: `Temps écoulé. ${currentPlayer.name} est éliminé.`,
+        message,
       };
     }
 
     // 5) Vérifier le nombre de tentatives
     const attemptsUsed = (game.attemptsUsed || 0) + 1;
     if (attemptsUsed > MAX_ATTEMPTS_PER_TURN) {
-      const updatedGame = this.eliminatePlayer(game, playerId, 'OTHER');
+      const damagedGame = this.eliminatePlayer(game, playerId, 'OTHER');
+      const message = `Nombre maximum de tentatives atteint. ${this.lifeLossMessage(damagedGame, playerId, currentPlayer.name)}`;
       const turn = createTurn(playerId, artistName, false, attemptsUsed, undefined, 'OTHER');
-      
+      const updatedGame = this.advanceTurnIfPlaying(damagedGame);
+
       return {
         isValid: false,
         turn,
@@ -240,7 +239,7 @@ export class GameService {
           ...updatedGame,
           turns: [...updatedGame.turns, turn],
         },
-        message: `Nombre maximum de tentatives atteint. ${currentPlayer.name} est éliminé.`,
+        message,
       };
     }
 
@@ -251,13 +250,15 @@ export class GameService {
     const previousArtist = game.lastArtist || (game.lastArtistName ? { name: game.lastArtistName } : null);
     const validation = this.validateMoveLocally(previousArtist, normalizedArtistName);
 
-    // 8) Règle REPEAT (HARD FAIL - élimination immédiate, pas de retry)
+    // 8) Règle REPEAT (HARD FAIL - pas de retry, coûte une vie même tour)
     if (validation.exists) {
       const canonicalId = this.getCanonicalId(validation.canonical);
       if (this.isArtistUsed(game, validation.canonical)) {
-        const updatedGame = this.eliminatePlayer(game, playerId, 'REPEAT');
+        const damagedGame = this.eliminatePlayer(game, playerId, 'REPEAT');
+        const message = `L'artiste "${validation.canonical.name}" a déjà été utilisé. ${this.lifeLossMessage(damagedGame, playerId, currentPlayer.name)}`;
         const turn = createTurn(playerId, normalizedArtistName, false, attemptsUsed, undefined, 'REPEAT');
-        
+        const updatedGame = this.advanceTurnIfPlaying(damagedGame);
+
         return {
           isValid: false,
           turn,
@@ -265,7 +266,7 @@ export class GameService {
             ...updatedGame,
             turns: [...updatedGame.turns, turn],
           },
-          message: `L'artiste "${validation.canonical.name}" a déjà été utilisé. ${currentPlayer.name} est éliminé.`,
+          message,
         };
       }
     }
@@ -278,17 +279,19 @@ export class GameService {
       };
       const turn = createTurn(playerId, normalizedArtistName, false, attemptsUsed, undefined, 'NOT_FOUND');
       
-      // Si c'était la dernière tentative, éliminer
+      // Si c'était la dernière tentative, retirer une vie
       if (attemptsUsed >= MAX_ATTEMPTS_PER_TURN) {
-        const eliminatedGame = this.eliminatePlayer(updatedGame, playerId, 'NOT_FOUND');
+        const damagedGame = this.eliminatePlayer(updatedGame, playerId, 'NOT_FOUND');
+        const message = `Artiste "${normalizedArtistName}" non trouvé. ${this.lifeLossMessage(damagedGame, playerId, currentPlayer.name)}`;
+        const finalGame = this.advanceTurnIfPlaying(damagedGame);
         return {
           isValid: false,
           turn,
           game: {
-            ...eliminatedGame,
-            turns: [...eliminatedGame.turns, turn],
+            ...finalGame,
+            turns: [...finalGame.turns, turn],
           },
-          message: `Artiste "${normalizedArtistName}" non trouvé. ${currentPlayer.name} est éliminé (tentative ${attemptsUsed}/${MAX_ATTEMPTS_PER_TURN}).`,
+          message,
         };
       }
       
@@ -311,17 +314,19 @@ export class GameService {
       };
       const turn = createTurn(playerId, normalizedArtistName, false, attemptsUsed, undefined, 'NO_RELATION');
       
-      // Si c'était la dernière tentative, éliminer
+      // Si c'était la dernière tentative, retirer une vie
       if (attemptsUsed >= MAX_ATTEMPTS_PER_TURN) {
-        const eliminatedGame = this.eliminatePlayer(updatedGame, playerId, 'NO_RELATION');
+        const damagedGame = this.eliminatePlayer(updatedGame, playerId, 'NO_RELATION');
+        const message = `Aucune collaboration trouvée. ${this.lifeLossMessage(damagedGame, playerId, currentPlayer.name)}`;
+        const finalGame = this.advanceTurnIfPlaying(damagedGame);
         return {
           isValid: false,
           turn,
           game: {
-            ...eliminatedGame,
-            turns: [...eliminatedGame.turns, turn],
+            ...finalGame,
+            turns: [...finalGame.turns, turn],
           },
-          message: `Aucune collaboration trouvée. ${currentPlayer.name} est éliminé (tentative ${attemptsUsed}/${MAX_ATTEMPTS_PER_TURN}).`,
+          message,
         };
       }
       
@@ -344,17 +349,19 @@ export class GameService {
       };
       const turn = createTurn(playerId, normalizedArtistName, false, attemptsUsed, validation.source, 'SINGLE_CIRCULAR');
       
-      // Si c'était la dernière tentative, éliminer
+      // Si c'était la dernière tentative, retirer une vie
       if (attemptsUsed >= MAX_ATTEMPTS_PER_TURN) {
-        const eliminatedGame = this.eliminatePlayer(updatedGame, playerId, 'SINGLE_CIRCULAR');
+        const damagedGame = this.eliminatePlayer(updatedGame, playerId, 'SINGLE_CIRCULAR');
+        const message = `"${validation.canonical.name}" n'a qu'une seule collaboration (avec l'artiste précédent). ${this.lifeLossMessage(damagedGame, playerId, currentPlayer.name)}`;
+        const finalGame = this.advanceTurnIfPlaying(damagedGame);
         return {
           isValid: false,
           turn,
           game: {
-            ...eliminatedGame,
-            turns: [...eliminatedGame.turns, turn],
+            ...finalGame,
+            turns: [...finalGame.turns, turn],
           },
-          message: `"${validation.canonical.name}" n'a qu'une seule collaboration (avec l'artiste précédent). ${currentPlayer.name} est éliminé (tentative ${attemptsUsed}/${MAX_ATTEMPTS_PER_TURN}).`,
+          message,
         };
       }
       
@@ -428,13 +435,17 @@ export class GameService {
   }
 
   /**
-   * Élimine un joueur
-   * Public pour permettre à GameManager de l'utiliser lors des timeouts
+   * Retire une vie à un joueur. Ne l'élimine réellement que s'il n'a plus
+   * de vie (livesRemaining atteint 0) — avec maxLives=1 (défaut historique),
+   * une perte de vie élimine toujours immédiatement, comme avant.
+   * Public pour permettre à GameManager de l'utiliser lors des timeouts.
    */
   eliminatePlayer(game: Game, playerId: string, reason?: InvalidReason): Game {
-    const updatedPlayers = game.players.map((player) =>
-      player.id === playerId ? { ...player, isEliminated: true } : player
-    );
+    const updatedPlayers = game.players.map((player) => {
+      if (player.id !== playerId) return player;
+      const livesRemaining = Math.max(0, player.livesRemaining - 1);
+      return { ...player, livesRemaining, isEliminated: livesRemaining <= 0 };
+    });
 
     const activePlayers = updatedPlayers.filter((p) => !p.isEliminated);
 
@@ -447,6 +458,29 @@ export class GameService {
       players: updatedPlayers,
       status: newStatus,
     };
+  }
+
+  /**
+   * Si la partie est toujours en cours, passe la main au joueur suivant et
+   * démarre son tour. Nécessaire dès que maxLives > 1 : un joueur qui
+   * survit à une perte de vie doit pouvoir laisser la partie continuer
+   * normalement au lieu de rester bloqué sur le même tour expiré.
+   */
+  private advanceTurnIfPlaying(game: Game): Game {
+    if (game.status !== GameStatus.IN_PROGRESS) return game;
+    const advancedGame = this.moveToNextPlayer(game);
+    return advancedGame.status === GameStatus.IN_PROGRESS ? this.startTurn(advancedGame) : advancedGame;
+  }
+
+  /**
+   * Message de statut cohérent selon qu'une perte de vie élimine le joueur
+   * ou non (maxLives > 1).
+   */
+  private lifeLossMessage(damagedGame: Game, playerId: string, playerName: string): string {
+    const player = damagedGame.players.find(p => p.id === playerId);
+    if (!player || player.isEliminated) return `${playerName} est éliminé.`;
+    const lives = player.livesRemaining;
+    return `${playerName} perd une vie (${lives} restante${lives > 1 ? 's' : ''}).`;
   }
 
   /**

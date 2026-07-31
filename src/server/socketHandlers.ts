@@ -1,6 +1,29 @@
 import { Server, Socket } from 'socket.io';
 import { GameManager } from './GameManager';
-import { Game, GameStatus } from '../types/Game';
+import { Game, GameStatus, GameSettings } from '../types/Game';
+
+const ALLOWED_TURN_DURATIONS_MS = [15000, 30000, 60000];
+const ALLOWED_MAX_LIVES = [1, 2, 3];
+
+/**
+ * Valide/filtre les réglages reçus du client — n'accepte que des valeurs
+ * whitelistées, ignore silencieusement le reste (défauts appliqués côté
+ * GameManager pour les champs absents/invalides).
+ */
+function sanitizeSettings(raw: unknown): Partial<GameSettings> {
+  const input = (raw ?? {}) as Partial<GameSettings>;
+  const settings: Partial<GameSettings> = {};
+  if (ALLOWED_TURN_DURATIONS_MS.includes(input.turnDurationMs as number)) {
+    settings.turnDurationMs = input.turnDurationMs;
+  }
+  if (ALLOWED_MAX_LIVES.includes(input.maxLives as number)) {
+    settings.maxLives = input.maxLives;
+  }
+  if (typeof input.jokersEnabled === 'boolean') {
+    settings.jokersEnabled = input.jokersEnabled;
+  }
+  return settings;
+}
 
 /**
  * Gère les événements WebSocket
@@ -10,14 +33,60 @@ export function setupSocketHandlers(io: Server, gameManager: GameManager) {
     console.log(`Client connecté: ${socket.id}`);
 
     // Créer une partie
-    socket.on('create-game', (data: { playerName: string }) => {
+    socket.on('create-game', (data: { playerName: string; settings?: Partial<GameSettings> }) => {
       try {
-        const { gameId, gameCode, player, game } = gameManager.createGame(data.playerName, socket.id);
+        const { gameId, gameCode, player, game } = gameManager.createGame(
+          data.playerName,
+          socket.id,
+          sanitizeSettings(data.settings)
+        );
         socket.join(gameId);
         socket.emit('game-created', { gameId, gameCode, player, game });
         console.log(`Partie créée: ${gameId}, code: ${gameCode} par ${data.playerName}`);
       } catch (error) {
         socket.emit('error', { message: 'Erreur lors de la création de la partie' });
+      }
+    });
+
+    // Mettre à jour les réglages du lobby (hôte uniquement, partie en attente)
+    socket.on('update-game-settings', (data: { gameId: string; settings: Partial<GameSettings> }) => {
+      try {
+        const playerInfo = gameManager.getPlayerBySocket(socket.id);
+        if (!playerInfo) {
+          socket.emit('error', { message: 'Joueur non trouvé' });
+          return;
+        }
+
+        const game = gameManager.updateSettings(data.gameId, playerInfo.playerId, sanitizeSettings(data.settings));
+        if (!game) {
+          socket.emit('error', { message: 'Impossible de modifier les réglages' });
+          return;
+        }
+
+        io.to(data.gameId).emit('game-state', { game, gameCode: gameManager.getGameCode(data.gameId) });
+      } catch (error) {
+        socket.emit('error', { message: 'Erreur lors de la mise à jour des réglages' });
+      }
+    });
+
+    // Basculer son statut PRÊT (non-hôte, partie en attente)
+    socket.on('toggle-ready', (data: { gameId: string }) => {
+      try {
+        const playerInfo = gameManager.getPlayerBySocket(socket.id);
+        if (!playerInfo) {
+          socket.emit('error', { message: 'Joueur non trouvé' });
+          return;
+        }
+
+        const game = gameManager.toggleReady(data.gameId, playerInfo.playerId);
+        if (!game) {
+          socket.emit('error', { message: 'Impossible de changer le statut prêt' });
+          return;
+        }
+
+        io.to(data.gameId).emit('game-state', { game, gameCode: gameManager.getGameCode(data.gameId) });
+      } catch (error) {
+        socket.emit('error', { message: 'Erreur lors du changement de statut prêt' });
       }
     });
 

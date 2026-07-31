@@ -3,6 +3,7 @@ import { SoloMove, createSoloMove } from '../types/SoloMove';
 import { SoloRunStatus } from '../types/SoloRun';
 import { gameDataStore } from '../services/GameDataStore';
 import { scoringService, ArtistCategory } from '../services/ScoringService';
+import { meetsMinCategory } from '../config/soloArtistFilter';
 
 const TURN_DURATION_MS = 30000;
 const BOT_DIFFICULTY_THRESHOLDS = [5, 7, 10];
@@ -52,7 +53,7 @@ export class BotManager {
   private runLocks: Map<string, boolean> = new Map();
 
   private chooseSeedArtist(): CanonicalArtist {
-    const seed = gameDataStore.getRandomSeedArtist();
+    const seed = gameDataStore.getRandomSeedArtist(a => meetsMinCategory(a.category));
     if (!seed) return { name: 'Booba', gameId: undefined };
     return { name: seed.name, gameId: seed.id };
   }
@@ -103,8 +104,14 @@ export class BotManager {
 
     // Filtrer les artistes déjà utilisés
     const usedSet = new Set(run.usedArtists);
-    const available = collaboratorIds.filter(id => !usedSet.has(String(id)));
+    let available = collaboratorIds.filter(id => !usedSet.has(String(id)));
     if (available.length === 0) return null;
+
+    // Le bot évite de proposer un artiste trop confidentiel (règle Solo uniquement)
+    // — si aucun candidat ne passe le seuil, on retombe sur la liste complète
+    // plutôt que de bloquer la partie.
+    const wellKnown = available.filter(id => meetsMinCategory(gameDataStore.getArtistById(id)?.category));
+    if (wellKnown.length > 0) available = wellKnown;
 
     // Simuler une erreur selon la difficulté
     const errorProb = this.getBotErrorProbability(run.currentTurn);

@@ -21,6 +21,23 @@ export interface CanonicalArtist {
 }
 
 /**
+ * Réglages d'une partie, configurables par l'hôte tant que status === WAITING.
+ * Défauts choisis pour reproduire exactement l'ancien comportement fixe
+ * (30s par tour, 1 vie = élimination immédiate) — voir CLAUDE_3.md §7.1.
+ */
+export interface GameSettings {
+  turnDurationMs: number; // 15000 | 30000 | 60000
+  maxLives: number;       // 1 | 2 | 3
+  jokersEnabled: boolean; // stocké, aucune mécanique branchée pour l'instant
+}
+
+export const DEFAULT_GAME_SETTINGS: GameSettings = {
+  turnDurationMs: 30000,
+  maxLives: 1,
+  jokersEnabled: false,
+};
+
+/**
  * Représente une partie de jeu
  */
 export interface Game {
@@ -34,12 +51,14 @@ export interface Game {
   usedArtists: string[];          // Identifiants canoniques utilisés (MBID prioritaire, sinon nom)
   currentTurnEndsAt?: number;     // Timestamp (epoch ms) de fin du tour actuel
   attemptsUsed?: number;          // Nombre de tentatives utilisées par le joueur actuel
+  settings: GameSettings;
+  readyPlayerIds: string[];       // joueurs non-hôtes ayant appuyé sur PRÊT
 }
 
 /**
  * Crée une nouvelle partie
  */
-export function createGame(id: string, players: Player[]): Game {
+export function createGame(id: string, players: Player[], settings: GameSettings = DEFAULT_GAME_SETTINGS): Game {
   if (players.length < 2) {
     throw new Error('Une partie nécessite au moins 2 joueurs');
   }
@@ -53,5 +72,7 @@ export function createGame(id: string, players: Player[]): Game {
     lastArtistName: null,
     usedArtists: [],
     attemptsUsed: 0,
+    settings,
+    readyPlayerIds: [],
   };
 }

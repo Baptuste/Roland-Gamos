@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import { Game, GameStatus, createGame } from '../types/Game';
+import { Game, GameStatus, createGame, GameSettings, DEFAULT_GAME_SETTINGS } from '../types/Game';
 import { Player, createPlayer } from '../types/Player';
 import { GameService } from '../services/GameService';
 import { ProposalResult } from '../services/GameService';
@@ -19,7 +19,15 @@ export class GameManager {
   private usedCodes: Set<string> = new Set(); // Codes déjà utilisés
   private gameTimers: Map<string, NodeJS.Timeout> = new Map(); // gameId -> timeout handle
   private proposalLocks: Map<string, boolean> = new Map(); // gameId -> anti double-soumission
+  private disconnectTimers: Map<string, NodeJS.Timeout> = new Map(); // playerId -> retrait différé (lobby)
   private io: Server | null = null; // Instance Socket.IO pour les notifications
+
+  /**
+   * Délai de grâce avant de retirer un joueur d'un lobby après déconnexion
+   * (rechargement de page, aléa réseau...). Sans ça, toute reconnexion —
+   * même un simple F5 — pouvait faire disparaître une partie en attente.
+   */
+  private static readonly LOBBY_DISCONNECT_GRACE_MS = 15000;
 
   /**
    * Définit l'instance Socket.IO pour les notifications
@@ -53,11 +61,12 @@ export class GameManager {
   /**
    * Crée une nouvelle partie
    */
-  createGame(hostPlayerName: string, socketId: string): { gameId: string; gameCode: string; player: Player; game: Game } {
+  createGame(hostPlayerName: string, socketId: string, settings?: Partial<GameSettings>): { gameId: string; gameCode: string; player: Player; game: Game } {
     const gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const gameCode = this.generateGameCode();
-    const player = createPlayer(`player-${Date.now()}`, hostPlayerName || 'Hôte');
-    
+    const finalSettings: GameSettings = { ...DEFAULT_GAME_SETTINGS, ...settings };
+    const player = createPlayer(`player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, hostPlayerName || 'Hôte', finalSettings.maxLives);
+
     // Construction manuelle pour permettre la création d'un lobby avec 1 joueur
     const game: Game = {
       id: gameId,
@@ -68,6 +77,8 @@ export class GameManager {
       lastArtistName: null,
       usedArtists: [],
       attemptsUsed: 0,
+      settings: finalSettings,
+      readyPlayerIds: [],
     };
     const gameService = new GameService(
       (gameId: string) => this.handleTurnTimeout(gameId)
@@ -141,6 +152,7 @@ export class GameManager {
       // Mettre à jour le socket ID pour ce joueur
       this.playerSockets.set(existingPlayerByName.id, socketId);
       this.socketPlayers.set(socketId, existingPlayerByName.id);
+      this.clearDisconnectTimer(existingPlayerByName.id);
       return { player: existingPlayerByName, game, isReconnection: true };
     }
 
@@ -151,6 +163,7 @@ export class GameManager {
       if (existingPlayer) {
         // Mettre à jour le socket ID
         this.playerSockets.set(existingPlayerId, socketId);
+        this.clearDisconnectTimer(existingPlayerId);
         return { player: existingPlayer, game, isReconnection: true };
       }
     }
@@ -163,7 +176,7 @@ export class GameManager {
     
     console.log(`Partie trouvée et en attente, ajout du joueur: ${playerName}`);
 
-    const player = createPlayer(`player-${Date.now()}`, playerName);
+    const player = createPlayer(`player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, playerName, game.settings.maxLives);
     const updatedGame = {
       ...game,
       players: [...game.players, player],
@@ -209,6 +222,48 @@ export class GameManager {
     console.log(`Partie démarrée: ${gameId}, currentPlayerIndex: ${startedGame.currentPlayerIndex}, joueur: ${startedGame.players[startedGame.currentPlayerIndex]?.name}`);
 
     return startedGame;
+  }
+
+  /**
+   * Met à jour les réglages d'une partie (hôte uniquement, tant que la partie
+   * n'a pas démarré). Répercute maxLives sur les joueurs déjà dans le lobby.
+   */
+  updateSettings(gameId: string, playerId: string, settings: Partial<GameSettings>): Game | null {
+    const game = this.games.get(gameId);
+    if (!game) return null;
+    if (game.status !== GameStatus.WAITING) return null;
+    if (game.players[0].id !== playerId) return null; // hôte uniquement
+
+    const updatedSettings: GameSettings = { ...game.settings, ...settings };
+    const updatedGame: Game = {
+      ...game,
+      settings: updatedSettings,
+      players: game.players.map(p => ({ ...p, livesRemaining: updatedSettings.maxLives })),
+    };
+
+    this.games.set(gameId, updatedGame);
+    return updatedGame;
+  }
+
+  /**
+   * Bascule l'état PRÊT d'un joueur non-hôte (tant que la partie n'a pas démarré).
+   */
+  toggleReady(gameId: string, playerId: string): Game | null {
+    const game = this.games.get(gameId);
+    if (!game) return null;
+    if (game.status !== GameStatus.WAITING) return null;
+    if (game.players[0].id === playerId) return null; // l'hôte n'a pas de bouton PRÊT
+
+    const isReady = game.readyPlayerIds.includes(playerId);
+    const updatedGame: Game = {
+      ...game,
+      readyPlayerIds: isReady
+        ? game.readyPlayerIds.filter(id => id !== playerId)
+        : [...game.readyPlayerIds, playerId],
+    };
+
+    this.games.set(gameId, updatedGame);
+    return updatedGame;
   }
 
   /**
@@ -285,9 +340,13 @@ export class GameManager {
 
     // Notifier tous les clients de la mise à jour de la partie
     if (this.io) {
+      const damagedPlayer = updatedGame.players.find(p => p.id === currentPlayer.id);
+      const lifeLossMsg = !damagedPlayer || damagedPlayer.isEliminated
+        ? `${currentPlayer.name} est éliminé.`
+        : `${currentPlayer.name} perd une vie (${damagedPlayer.livesRemaining} restante${damagedPlayer.livesRemaining > 1 ? 's' : ''}).`;
       const message = finalGame.status === GameStatus.FINISHED
-        ? `Le temps est écoulé. ${currentPlayer.name} est éliminé. La partie est terminée.`
-        : `Le temps est écoulé. ${currentPlayer.name} est éliminé.`;
+        ? `Le temps est écoulé. ${lifeLossMsg} La partie est terminée.`
+        : `Le temps est écoulé. ${lifeLossMsg}`;
 
       this.io.to(gameId).emit('game-updated', {
         game: finalGame,
@@ -342,6 +401,14 @@ export class GameManager {
 
       // Mettre à jour la partie
       this.games.set(gameId, result.game);
+
+      // Reprogrammer le timer pour le tour suivant (sinon le timeout serveur
+      // ne s'applique plus qu'au tour initial de la partie)
+      if (result.game.status === GameStatus.IN_PROGRESS) {
+        this.scheduleTurnTimer(gameId, result.game);
+      } else {
+        this.clearTurnTimer(gameId);
+      }
 
       return result;
     } finally {
@@ -402,9 +469,11 @@ export class GameManager {
       usedArtists: [],
       currentTurnEndsAt: undefined,
       attemptsUsed: 0,
+      readyPlayerIds: [],
       players: game.players.map((player) => ({
         ...player,
         isEliminated: false, // Réactiver tous les joueurs
+        livesRemaining: game.settings.maxLives,
       })),
     };
 
@@ -459,6 +528,7 @@ export class GameManager {
     // Mettre à jour les mappings socket
     this.playerSockets.set(playerId, socketId);
     this.socketPlayers.set(socketId, playerId);
+    this.clearDisconnectTimer(playerId);
 
     console.log(`Reconnexion réussie: joueur ${player.name} (${playerId}) à la partie ${gameId}`);
 
@@ -466,7 +536,12 @@ export class GameManager {
   }
 
   /**
-   * Gère la déconnexion d'un joueur
+   * Gère la déconnexion d'un joueur.
+   * Ne retire jamais un joueur d'un lobby en attente immédiatement — un
+   * simple rechargement de page produit aussi un événement disconnect, et
+   * supprimer la partie sur-le-champ ferait perdre le lobby de l'hôte pour
+   * un aléa réseau. On programme le retrait après un délai de grâce
+   * (voir scheduleDisconnectRemoval), annulé si le joueur revient à temps.
    */
   handleDisconnect(socketId: string): void {
     const playerId = this.socketPlayers.get(socketId);
@@ -474,29 +549,83 @@ export class GameManager {
       return;
     }
 
+    this.playerSockets.delete(playerId);
+    this.socketPlayers.delete(socketId);
+
     // Trouver la partie
     for (const [gameId, playerSet] of this.gamePlayers.entries()) {
       if (playerSet.has(playerId)) {
         const game = this.games.get(gameId);
         if (game && game.status === GameStatus.WAITING) {
-          // Si la partie n'a pas commencé, retirer le joueur
-          const updatedPlayers = game.players.filter((p) => p.id !== playerId);
-          if (updatedPlayers.length >= 2) {
-            this.games.set(gameId, { ...game, players: updatedPlayers });
-          } else {
-            // Pas assez de joueurs, supprimer la partie
-            this.games.delete(gameId);
-            this.gameServices.delete(gameId);
-          }
-          playerSet.delete(playerId);
+          this.scheduleDisconnectRemoval(gameId, playerId);
         }
         // Si la partie a commencé, on garde le joueur mais on marque qu'il est déconnecté
         break;
       }
     }
+  }
 
-    this.playerSockets.delete(playerId);
-    this.socketPlayers.delete(socketId);
+  /**
+   * Annule un retrait différé en attente pour ce joueur (appelé dès qu'il
+   * se reconnecte, via reconnect-game ou join-game en mode reconnexion).
+   */
+  private clearDisconnectTimer(playerId: string): void {
+    const timer = this.disconnectTimers.get(playerId);
+    if (timer) {
+      clearTimeout(timer);
+      this.disconnectTimers.delete(playerId);
+    }
+  }
+
+  /**
+   * Programme le retrait effectif d'un joueur d'un lobby en attente après
+   * le délai de grâce, sauf s'il s'est reconnecté entre-temps (un nouveau
+   * socket lui aura été réassigné dans playerSockets).
+   */
+  private scheduleDisconnectRemoval(gameId: string, playerId: string): void {
+    this.clearDisconnectTimer(playerId);
+
+    const timer = setTimeout(() => {
+      this.disconnectTimers.delete(playerId);
+
+      // Reconnecté entre-temps : ne rien faire
+      if (this.playerSockets.has(playerId)) return;
+
+      const game = this.games.get(gameId);
+      if (!game || game.status !== GameStatus.WAITING) return;
+      if (!game.players.some((p) => p.id === playerId)) return;
+
+      const updatedPlayers = game.players.filter((p) => p.id !== playerId);
+      const playerSet = this.gamePlayers.get(gameId);
+      if (playerSet) playerSet.delete(playerId);
+
+      if (updatedPlayers.length >= 2) {
+        this.games.set(gameId, { ...game, players: updatedPlayers });
+      } else {
+        // Pas assez de joueurs restants, supprimer la partie (et son code)
+        this.deleteGameAndCode(gameId);
+      }
+    }, GameManager.LOBBY_DISCONNECT_GRACE_MS);
+
+    this.disconnectTimers.set(playerId, timer);
+  }
+
+  /**
+   * Supprime une partie de tous les registres internes, y compris le
+   * mapping code -> gameId (oublié par endroits avant, ce qui laissait des
+   * codes "fantômes" pointant vers une partie déjà supprimée).
+   */
+  private deleteGameAndCode(gameId: string): void {
+    this.clearTurnTimer(gameId);
+    this.games.delete(gameId);
+    this.gameServices.delete(gameId);
+    this.gamePlayers.delete(gameId);
+    for (const [code, id] of this.gameCodes.entries()) {
+      if (id === gameId) {
+        this.gameCodes.delete(code);
+        break;
+      }
+    }
   }
 
   /**
@@ -509,16 +638,13 @@ export class GameManager {
       if (game.status === GameStatus.FINISHED) {
         const gameAge = now - parseInt(gameId.split('-')[1]);
         if (gameAge > maxAge) {
-          this.clearTurnTimer(gameId);
-          this.games.delete(gameId);
-          this.gameServices.delete(gameId);
           const playerSet = this.gamePlayers.get(gameId);
           if (playerSet) {
             playerSet.forEach((playerId) => {
               this.playerSockets.delete(playerId);
             });
-            this.gamePlayers.delete(gameId);
           }
+          this.deleteGameAndCode(gameId);
         }
       }
     }

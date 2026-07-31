@@ -15,17 +15,20 @@ export interface Player {
   id: string;
   name: string;
   isEliminated: boolean;
+  livesRemaining: number;
   jokers?: Jokers;
 }
 
 /**
  * Crée un nouveau joueur
+ * @param maxLives Nombre de vies de départ (défaut 1 = comportement historique : 1 erreur = élimination)
  */
-export function createPlayer(id: string, name: string): Player {
+export function createPlayer(id: string, name: string, maxLives: number = 1): Player {
   return {
     id,
     name,
     isEliminated: false,
+    livesRemaining: maxLives,
     jokers: {},
   };
 }

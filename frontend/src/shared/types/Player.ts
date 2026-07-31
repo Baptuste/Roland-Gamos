@@ -9,13 +9,15 @@ export interface Player {
   id: string;
   name: string;
   isEliminated: boolean;
+  livesRemaining: number;
   jokers?: Jokers;
 }
 
-export function createPlayer(id: string, name: string): Player {
+export function createPlayer(id: string, name: string, maxLives: number = 1): Player {
   return {
     id,
     name,
     isEliminated: false,
+    livesRemaining: maxLives,
   };
 }
