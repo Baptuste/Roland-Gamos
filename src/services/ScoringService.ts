@@ -10,7 +10,21 @@ const BASE_POINTS = 100;
  */
 const SCORE_CAP = 300;
 
-export type ArtistCategory = 'ultra_mainstream' | 'mainstream' | 'intermediate' | 'niche' | 'underground';
+/**
+ * 7 paliers de popularité, calculés en quantiles relatifs sur artists.lastfm_listeners
+ * (npm run popularity:lastfm) — remplace l'ancien système à 5 paliers basé sur
+ * fr_collab_count (CLAUDE_3.md §2.5). 'confidentiel' et 'connu' sont les 2 paliers
+ * ajoutés ; les 5 autres gardent leurs noms et multiplicateurs d'origine pour ne pas
+ * casser une éventuelle config SOLO_MIN_ARTIST_CATEGORY déjà déployée.
+ */
+export type ArtistCategory =
+  | 'ultra_mainstream'
+  | 'mainstream'
+  | 'connu'
+  | 'intermediate'
+  | 'niche'
+  | 'underground'
+  | 'confidentiel';
 
 /**
  * Entrées nécessaires au calcul du score d'un coup.
@@ -103,9 +117,11 @@ export class ScoringService {
    */
   private calculateCategoryMult(category: ArtistCategory): number {
     const bonuses: Record<ArtistCategory, number> = {
+      confidentiel: 1.15,
       underground: 1.12,
       niche: 1.08,
       intermediate: 1.04,
+      connu: 1.03,
       mainstream: 1.02,
       ultra_mainstream: 1.00,
     };

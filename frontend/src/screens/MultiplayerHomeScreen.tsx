@@ -2,17 +2,34 @@ import { useState, useEffect } from 'react';
 import { socketService } from '../services/socketService';
 import { Game, Player, GameSettings, getTeamIds, JokerType } from '../shared/types';
 import '../styles/HomeScreen.css';
+import '../styles/Backgrounds.css';
+import { useFrameCycle } from '../hooks/useFrameCycle';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+const ACCUEIL_FRAMES = Array.from({ length: 7 }, (_, i) => `/assets/backgrounds-animated/accueil/frame-${i}.png`);
+// NOTE provisoire : fond animé PixelLab pas encore généré pour le lobby (quota
+// de génération du compte épuisé, cf. SoloInfiniteScreen.tsx). Le lobby garde
+// le croquis statique + décor CSS en attendant.
 
 const TEAM_LABELS = ['Équipe A', 'Équipe B', 'Équipe C', 'Équipe D'];
 const TEAM_COLORS = ['var(--primary)', 'var(--secondary)', 'var(--accent)', 'var(--error)'];
 const JOKER_TYPES: JokerType[] = ['timer', 'skip', 'combo', 'bouclier', 'archives', 'resurrection'];
 const JOKER_LABELS: Record<JokerType, string> = {
-  timer: 'Timer',
+  timer: 'Sursis',
   skip: 'Skip',
   combo: 'Combo',
-  bouclier: 'Bouclier',
+  bouclier: 'Blindage',
   archives: 'Archives',
-  resurrection: 'Résurrection',
+  resurrection: 'Second Souffle',
+};
+// Icônes pixel art générées (PixelLab).
+const JOKER_ICON: Partial<Record<JokerType, string>> = {
+  timer: '/assets/jokers/timer.png',
+  skip: '/assets/jokers/skip.png',
+  combo: '/assets/jokers/combo.png',
+  bouclier: '/assets/jokers/bouclier.png',
+  archives: '/assets/jokers/archives.png',
+  resurrection: '/assets/jokers/resurrection.png',
 };
 
 interface MultiplayerHomeScreenProps {
@@ -21,10 +38,17 @@ interface MultiplayerHomeScreenProps {
   onStartBot?: (playerName: string) => void;
   onShowLeaderboard?: () => void;
   onShowStats?: () => void;
+  onShowProfile?: (playerName: string) => void;
   onBackToHome?: () => void;
   initialGame?: Game | null;
   initialPlayer?: Player | null;
   initialGameCode?: string | null;
+  /**
+   * UUID persistant du joueur (même mécanisme que soloPlayerId en Solo,
+   * cf. App.tsx) — permet de rattacher stats/leaderboard Multijoueur à un
+   * profil durable au lieu d'un id de session éphémère.
+   */
+  persistentPlayerId?: string;
 }
 
 export default function MultiplayerHomeScreen({
@@ -33,10 +57,12 @@ export default function MultiplayerHomeScreen({
   onStartBot,
   onShowLeaderboard,
   onShowStats,
+  onShowProfile,
   onBackToHome,
   initialGame = null,
   initialPlayer = null,
   initialGameCode = null,
+  persistentPlayerId,
 }: MultiplayerHomeScreenProps) {
   const [mode, setMode] = useState<'create' | 'join'>('create');
   const [playerName, setPlayerName] = useState('');
@@ -47,6 +73,7 @@ export default function MultiplayerHomeScreen({
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(initialPlayer);
   const [createdGameCode, setCreatedGameCode] = useState<string | null>(initialGameCode);
   const [jokerSelection, setJokerSelection] = useState<Partial<Record<JokerType, number>>>({});
+  const accueilFrame = useFrameCycle(ACCUEIL_FRAMES, 220);
 
   // Auto-remplissage du dernier nom utilisé depuis localStorage
   useEffect(() => {
@@ -248,6 +275,18 @@ export default function MultiplayerHomeScreen({
     };
   }, [onGameJoined]);
 
+  // Fire-and-forget : upsert du profil (players.pseudo) pour que les stats/
+  // leaderboard Multijoueur (rattachés à persistentPlayerId) pointent vers un
+  // profil existant — même appel que App.tsx pour Solo Infini/vs Bot.
+  const identifyPlayer = () => {
+    if (!persistentPlayerId || !playerName.trim()) return;
+    fetch(`${BACKEND_URL}/api/players/identify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: persistentPlayerId, pseudo: playerName.trim() }),
+    }).catch(() => {});
+  };
+
   const handleCreateGame = () => {
     if (!playerName.trim()) {
       setError('Veuillez entrer votre nom');
@@ -256,7 +295,8 @@ export default function MultiplayerHomeScreen({
 
     setIsConnecting(true);
     setError(null);
-    socketService.emit('create-game', { playerName: playerName.trim() });
+    identifyPlayer();
+    socketService.emit('create-game', { playerName: playerName.trim(), persistentId: persistentPlayerId });
   };
 
   const handleJoinGame = () => {
@@ -279,9 +319,11 @@ export default function MultiplayerHomeScreen({
 
     setIsConnecting(true);
     setError(null);
+    identifyPlayer();
     socketService.emit('join-game', {
       gameCode: code,
       playerName: playerName.trim(),
+      persistentId: persistentPlayerId,
     });
   };
 
@@ -346,7 +388,10 @@ export default function MultiplayerHomeScreen({
     const canStart = currentGame.players.length >= 2 && isHost;
 
     return (
-      <div className="home-screen">
+      <div className="home-screen home-screen--lobby">
+        <div className="deco-layer">
+          <div className="deco-sign-glow" style={{ top: '4%', left: '20%', width: '60%', height: '20%' }} />
+        </div>
         <div className="container">
           <div className="card fade-in">
             <h2 className="card-title">
@@ -641,7 +686,12 @@ export default function MultiplayerHomeScreen({
                   <div className="joker-select-grid">
                     {JOKER_TYPES.map((type) => (
                       <div key={type} className="joker-select-item">
-                        <span className="joker-select-label">{JOKER_LABELS[type]}</span>
+                        <span className="joker-select-name">
+                          {JOKER_ICON[type] && (
+                            <img src={JOKER_ICON[type]} alt="" className="joker-icon-img" />
+                          )}
+                          <span className="joker-select-label">{JOKER_LABELS[type]}</span>
+                        </span>
                         <div className="joker-select-controls">
                           <button
                             type="button"
@@ -753,7 +803,10 @@ export default function MultiplayerHomeScreen({
   }
 
   return (
-    <div className="home-screen">
+    <div
+      className="home-screen home-screen--accueil"
+      style={{ backgroundImage: `linear-gradient(180deg, rgba(6, 6, 15, 0.35) 0%, rgba(6, 6, 15, 0.55) 55%, rgba(6, 6, 15, 0.8) 100%), url(${accueilFrame})` }}
+    >
       <div className="container">
         <div className="home-header fade-in">
           <h1 className="title">🎤 Roland Gamos</h1>
@@ -876,7 +929,7 @@ export default function MultiplayerHomeScreen({
               </div>
             )}
 
-            {(onShowLeaderboard || onShowStats) && (
+            {(onShowLeaderboard || onShowStats || onShowProfile) && (
               <div className="mt-4" style={{ display: 'flex', gap: '0.5rem' }}>
                 {onShowLeaderboard && (
                   <button
@@ -896,6 +949,21 @@ export default function MultiplayerHomeScreen({
                     type="button"
                   >
                     Statistiques
+                  </button>
+                )}
+                {onShowProfile && (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      const trimmedName = playerName.trim();
+                      if (trimmedName) onShowProfile(trimmedName);
+                    }}
+                    disabled={!playerName.trim()}
+                    title={!playerName.trim() ? 'Entrez votre nom pour accéder à votre profil' : undefined}
+                    type="button"
+                  >
+                    Profil
                   </button>
                 )}
               </div>

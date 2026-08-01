@@ -4,6 +4,29 @@
   flex: 1;
   padding: 1rem 0;
   background: transparent;
+  position: relative;
+  isolation: isolate;
+}
+
+.home-screen > .container {
+  position: relative;
+  z-index: 1;
+}
+
+.home-screen--accueil {
+  background-color: var(--bg);
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+/* Fond animé PixelLab pas encore généré pour le lobby (quota compte épuisé) —
+   fallback croquis statique + décor CSS en attendant. */
+.home-screen--lobby {
+  background:
+    linear-gradient(rgba(6, 6, 15, 0.65), rgba(6, 6, 15, 0.65)),
+    url('/assets/backgrounds/multijoueur.png') center top / cover no-repeat;
 }
 
 .home-header {
@@ -246,23 +269,46 @@
 /* Sélection des jokers (lobby, mode manuel) */
 .joker-select-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 0.5rem;
 }
 
 .joker-select-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 0.75rem;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.5rem;
   background: var(--bg-input);
   border: 2px solid var(--border);
   border-radius: 4px;
+  text-align: center;
+}
+
+.joker-select-name {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
 }
 
 .joker-select-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
+  line-height: 1.1;
+}
+
+.joker-icon-img {
+  width: 36px;
+  height: 36px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.joker-icon-img--small {
+  width: 14px;
+  height: 14px;
 }
 
 .joker-select-controls {

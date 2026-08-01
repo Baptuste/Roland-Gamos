@@ -4,6 +4,7 @@ import { Player, createPlayer, JokerType } from '../types/Player';
 import { GameService } from '../services/GameService';
 import { ProposalResult } from '../services/GameService';
 import { createTurn } from '../types/Turn';
+import { handleGameFinish } from '../services/GameFinishService';
 
 /**
  * Gestionnaire de parties multijoueurs
@@ -61,11 +62,11 @@ export class GameManager {
   /**
    * Crée une nouvelle partie
    */
-  createGame(hostPlayerName: string, socketId: string, settings?: Partial<GameSettings>): { gameId: string; gameCode: string; player: Player; game: Game } {
+  createGame(hostPlayerName: string, socketId: string, settings?: Partial<GameSettings>, persistentId?: string): { gameId: string; gameCode: string; player: Player; game: Game } {
     const gameId = `game-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const gameCode = this.generateGameCode();
     const finalSettings: GameSettings = { ...DEFAULT_GAME_SETTINGS, ...settings };
-    const player = createPlayer(`player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, hostPlayerName || 'Hôte', finalSettings.maxLives);
+    const player = createPlayer(`player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, hostPlayerName || 'Hôte', finalSettings.maxLives, persistentId);
 
     // Construction manuelle pour permettre la création d'un lobby avec 1 joueur
     const game: Game = {
@@ -115,7 +116,7 @@ export class GameManager {
    * Rejoint une partie existante (par code ou ID)
    * @returns { player, game, isReconnection } - isReconnection indique si c'est une reconnexion
    */
-  joinGame(gameCodeOrId: string, playerName: string, socketId: string): { player: Player; game: Game; isReconnection: boolean } | null {
+  joinGame(gameCodeOrId: string, playerName: string, socketId: string, persistentId?: string): { player: Player; game: Game; isReconnection: boolean } | null {
     console.log(`Recherche de partie avec: ${gameCodeOrId}`);
     console.log(`Codes disponibles: ${Array.from(this.gameCodes.keys()).join(', ')}`);
     
@@ -176,7 +177,7 @@ export class GameManager {
     
     console.log(`Partie trouvée et en attente, ajout du joueur: ${playerName}`);
 
-    const player = createPlayer(`player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, playerName, game.settings.maxLives);
+    const player = createPlayer(`player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, playerName, game.settings.maxLives, persistentId);
     const updatedGame = {
       ...game,
       players: [...game.players, player],
@@ -449,6 +450,7 @@ export class GameManager {
     if (!updatedGame) return null;
 
     this.games.set(gameId, updatedGame);
+    this.maybeProcessGameEnd(game.status, updatedGame);
 
     if (updatedGame.status === GameStatus.IN_PROGRESS) {
       this.scheduleTurnTimer(gameId, updatedGame);
@@ -551,6 +553,7 @@ export class GameManager {
         };
 
     this.games.set(gameId, finalGame);
+    this.maybeProcessGameEnd(game.status, finalGame);
 
     // Notifier tous les clients de la mise à jour de la partie
     if (this.io) {
@@ -612,6 +615,7 @@ export class GameManager {
 
       // Mettre à jour la partie
       this.games.set(gameId, result.game);
+      this.maybeProcessGameEnd(game.status, result.game);
 
       // Reprogrammer le timer pour le tour suivant (sinon le timeout serveur
       // ne s'applique plus qu'au tour initial de la partie)
@@ -624,6 +628,64 @@ export class GameManager {
       return result;
     } finally {
       this.proposalLocks.delete(gameId);
+    }
+  }
+
+  /**
+   * Traite la fin d'une partie Multijoueur : détermine vainqueur(s) (joueur
+   * en classique, équipe complète en mode équipe) et écrit stats/leaderboard/
+   * XP pour chaque joueur via handleGameFinish (voir GameFinishService).
+   * Appelé côté serveur dès que game.status passe à FINISHED — fire-and-forget
+   * (ne bloque jamais la réponse socket du coup qui a terminé la partie).
+   */
+  private processGameEnd(game: Game): void {
+    let winnerIds: Set<string>;
+
+    if (game.settings.teamsEnabled) {
+      const activePlayers = game.players.filter((p) => !p.isEliminated);
+      const winningTeamId = activePlayers[0]?.teamId;
+      winnerIds = new Set(
+        winningTeamId
+          ? game.players.filter((p) => p.teamId === winningTeamId).map((p) => p.id)
+          : []
+      );
+    } else {
+      const activePlayers = game.players.filter((p) => !p.isEliminated);
+      winnerIds = new Set(activePlayers.map((p) => p.id));
+    }
+
+    for (const player of game.players) {
+      handleGameFinish({
+        playerId: player.persistentId || player.id,
+        playerName: player.name,
+        score: player.score ?? 0,
+        turns: game.usedArtists.length,
+        mode: 'Multijoueur',
+        multiWin: winnerIds.has(player.id),
+      }).then((result) => {
+        // Sans ça, le joueur n'a aucun retour visuel sur l'XP gagnée en
+        // Multijoueur (contrairement au Solo) — cf. retour utilisateur.
+        if (!this.io) return;
+        const socketId = this.playerSockets.get(player.id);
+        if (!socketId) return;
+        this.io.to(socketId).emit('game-finish-result', {
+          gameId: game.id,
+          xp: result.xp,
+          unlocks: result.unlocks,
+          leaderboard: result.leaderboard,
+        });
+      }).catch((err) => console.error(`Erreur handleGameFinish (Multijoueur) pour ${player.name}:`, err));
+    }
+  }
+
+  /**
+   * Déclenche processGameEnd si la partie vient tout juste de passer à
+   * FINISHED (transition détectée par comparaison avant/après), jamais deux
+   * fois pour la même partie.
+   */
+  private maybeProcessGameEnd(previousStatus: GameStatus, updatedGame: Game): void {
+    if (previousStatus !== GameStatus.FINISHED && updatedGame.status === GameStatus.FINISHED) {
+      this.processGameEnd(updatedGame);
     }
   }
 
@@ -685,6 +747,7 @@ export class GameManager {
         ...player,
         isEliminated: false, // Réactiver tous les joueurs
         livesRemaining: game.settings.maxLives,
+        score: 0, // Nouvelle partie = nouveau cumul de score
       })),
     };
 

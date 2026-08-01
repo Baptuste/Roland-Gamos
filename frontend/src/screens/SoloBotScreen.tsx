@@ -3,6 +3,7 @@ import { botService, BotGameRun, BotGameMoveResult } from '../shared/services/Bo
 import { useArtistAutocomplete } from '../hooks/useArtistAutocomplete';
 import GameOverScreen from './GameOverScreen';
 import '../styles/GameScreen.css';
+import '../styles/Backgrounds.css';
 
 interface SoloBotScreenProps {
   playerName: string;
@@ -159,7 +160,13 @@ export default function SoloBotScreen({ playerName, playerId, onBackToHome, onRe
   }
 
   return (
-    <div className="game-screen">
+    <div className="game-screen game-screen--solo-bot">
+      <div className="deco-layer">
+        <div className="deco-spot-sweep" />
+        <span className="deco-phone-flash" style={{ top: '69%', left: '20%', animationDelay: '0s' }} />
+        <span className="deco-phone-flash" style={{ top: '68%', left: '68%', animationDelay: '1.2s' }} />
+        <span className="deco-phone-flash" style={{ top: '79%', left: '38%', animationDelay: '2.3s' }} />
+      </div>
       <div className="container">
         {/* Header */}
         <div className="game-header">

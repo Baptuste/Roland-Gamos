@@ -30,13 +30,19 @@ interface ETLArtist {
   status: 'included' | 'excluded' | 'needs_review';
 }
 
-function assignCategory(artist: ETLArtist): { category: string; category_bonus: number } {
-  const count = artist.fr_collab_count;
-  if (artist.is_seed || count >= 20) return { category: 'ultra_mainstream', category_bonus: 80 };
-  if (count >= 10) return { category: 'mainstream', category_bonus: 60 };
-  if (count >= 5) return { category: 'intermediate', category_bonus: 40 };
-  if (count >= 3) return { category: 'underground', category_bonus: 25 };
-  return { category: 'niche', category_bonus: 10 };
+/**
+ * Catégorie PROVISOIRE à l'import — la vraie catégorisation (7 paliers en quantiles
+ * sur artists.lastfm_listeners) est calculée après coup par `npm run popularity:lastfm`
+ * (CLAUDE_3.md §2.5). Remplace l'ancien assignCategory() basé sur fr_collab_count
+ * (proxy faible : un artiste peu présent dans ce dataset local n'est pas forcément
+ * peu populaire dans la vraie vie, et inversement).
+ *
+ * Palier neutre ('intermediate') choisi plutôt qu'un extrême pour ne pas fausser le
+ * filtre Solo (SOLO_MIN_ARTIST_CATEGORY) ni les bonus de score tant que l'artiste
+ * n'a pas encore été synchronisé avec Last.fm.
+ */
+function assignCategory(_artist: ETLArtist): { category: string; category_bonus: number } {
+  return { category: 'intermediate', category_bonus: 40 };
 }
 
 interface ETLCollaboration {
@@ -94,6 +100,7 @@ async function main() {
         name: a.name,
         image_url: a.image_url || null,
         status: a.status,
+        mbid: a.mbid || null,
         category,
         category_bonus,
       };

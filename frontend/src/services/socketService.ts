@@ -23,8 +23,8 @@ const SERVER_URL = getServerUrl();
 
 export interface SocketEvents {
   // Événements émis par le client
-  'create-game': (data: { playerName: string; settings?: Partial<GameSettings> }) => void;
-  'join-game': (data: { gameCode: string; playerName: string }) => void;
+  'create-game': (data: { playerName: string; settings?: Partial<GameSettings>; persistentId?: string }) => void;
+  'join-game': (data: { gameCode: string; playerName: string; persistentId?: string }) => void;
   'start-game': (data: { gameId: string }) => void;
   'reset-game': (data: { gameId: string }) => void;
   'propose-artist': (data: { gameId: string; artistName: string }) => void;
@@ -54,6 +54,12 @@ export interface SocketEvents {
   }) => void;
   'game-state': (data: { game: Game; gameCode?: string }) => void;
   'game-code': (data: { gameId: string; gameCode: string }) => void;
+  'game-finish-result': (data: {
+    gameId: string;
+    xp: { gained: number; total: number; level: number; leveledUp: boolean; prestige: string } | null;
+    unlocks: any[];
+    leaderboard: { rank: number; score: number } | null;
+  }) => void;
   'error': (data: { message: string }) => void;
 }
 

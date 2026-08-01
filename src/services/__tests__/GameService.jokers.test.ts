@@ -24,6 +24,7 @@ jest.mock('../GameDataStore', () => ({
       const map: Record<number, number[]> = { 1: [2], 2: [1, 3], 3: [2] };
       return map[id] || [];
     },
+    getCollaboration: () => null, // pair_family_count non exercé par ces tests (jokers, pas scoring)
   },
 }));
 

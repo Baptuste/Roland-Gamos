@@ -45,11 +45,13 @@ describe('ScoringService', () => {
     });
   });
 
-  describe('categoryMult (sens corrigé — picks obscurs récompensés)', () => {
+  describe('categoryMult (sens corrigé — picks obscurs récompensés, 7 paliers)', () => {
     it.each([
+      ['confidentiel', 1.15],
       ['underground', 1.12],
       ['niche', 1.08],
       ['intermediate', 1.04],
+      ['connu', 1.03],
       ['mainstream', 1.02],
       ['ultra_mainstream', 1.00],
     ] as const)('category=%p -> mult=%p', (category, expected) => {

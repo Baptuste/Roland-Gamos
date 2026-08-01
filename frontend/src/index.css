@@ -10,28 +10,28 @@
 }
 
 :root {
-  /* Palette principale */
-  --primary: #a855f7;
-  --primary-dark: #7c3aed;
-  --primary-glow: rgba(168, 85, 247, 0.5);
-  --secondary: #f97316;
-  --secondary-dark: #ea580c;
-  --secondary-glow: rgba(249, 115, 22, 0.5);
-  --accent: #06b6d4;
-  --accent-glow: rgba(6, 182, 212, 0.4);
+  /* Palette principale — alignée sur CLAUDE_1.md (bleu nuit / or / violet / rouge) */
+  --primary: #9b59ff;
+  --primary-dark: #7b2fe0;
+  --primary-glow: rgba(155, 89, 255, 0.5);
+  --secondary: #ff4444;
+  --secondary-dark: #cc2222;
+  --secondary-glow: rgba(255, 68, 68, 0.5);
+  --accent: #ffd700;
+  --accent-glow: rgba(255, 215, 0, 0.4);
 
   /* Feedback */
-  --success: #22c55e;
-  --success-glow: rgba(34, 197, 94, 0.4);
-  --error: #ef4444;
-  --error-glow: rgba(239, 68, 68, 0.4);
+  --success: #44ff88;
+  --success-glow: rgba(68, 255, 136, 0.4);
+  --error: #ff4444;
+  --error-glow: rgba(255, 68, 68, 0.4);
   --warning: #eab308;
 
   /* Backgrounds */
-  --bg: #0a0a1a;
-  --bg-card: #111128;
-  --bg-input: #1a1a3e;
-  --bg-surface: #15152d;
+  --bg: #06060f;
+  --bg-card: #0d0020;
+  --bg-input: #170036;
+  --bg-surface: #0f0028;
 
   /* Text */
   --text: #e2e8f0;
@@ -39,14 +39,14 @@
   --text-bright: #ffffff;
 
   /* Borders */
-  --border: #2a2a5a;
-  --border-glow: #a855f7;
+  --border: #2a0a40;
+  --border-glow: #9b59ff;
 
   /* Shadows */
   --shadow: rgba(0, 0, 0, 0.5);
-  --neon-purple: 0 0 10px var(--primary-glow), 0 0 40px rgba(168, 85, 247, 0.15);
-  --neon-orange: 0 0 10px var(--secondary-glow), 0 0 40px rgba(249, 115, 22, 0.15);
-  --neon-cyan: 0 0 10px var(--accent-glow), 0 0 40px rgba(6, 182, 212, 0.15);
+  --neon-purple: 0 0 10px var(--primary-glow), 0 0 40px rgba(155, 89, 255, 0.15);
+  --neon-orange: 0 0 10px var(--secondary-glow), 0 0 40px rgba(255, 68, 68, 0.15);
+  --neon-cyan: 0 0 10px var(--accent-glow), 0 0 40px rgba(255, 215, 0, 0.15);
 }
 
 body {
@@ -56,9 +56,9 @@ body {
   image-rendering: pixelated;
   background: var(--bg);
   background-image:
-    radial-gradient(ellipse at 20% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(249, 115, 22, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 50%, rgba(6, 182, 212, 0.03) 0%, transparent 60%);
+    radial-gradient(ellipse at 20% 80%, rgba(155, 89, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(255, 68, 68, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(255, 215, 0, 0.03) 0%, transparent 60%);
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;

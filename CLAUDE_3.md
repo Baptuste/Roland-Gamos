@@ -216,9 +216,28 @@ Les décisions ci-dessus ont été prises via un environnement sans accès en é
 **Ajustement du seuil — testé empiriquement (2026-07-31), conclusion : ne pas toucher au seuil par défaut.**
 `category` est un classement **relatif** par quintiles de `fr_collab_count` (5 paliers de ~1714 artistes chacun sur la base actuelle), pas une mesure absolue de notoriété. Test concret : l'artiste `2CheeseMilkShake` (repéré comme nom douteux lors des tests en direct, cf. §7.7-like constat) n'a que **8 collaborations FR recensées**, mais tombe dans la catégorie **`ultra_mainstream`** — le palier le plus haut, faute d'une distribution suffisamment étalée. Conséquence : remonter `SOLO_MIN_ARTIST_CATEGORY` ne changerait rien pour ce cas précis (déjà dans la catégorie la plus élevée), et le pousser jusqu'à exclure `ultra_mainstream` viderait ~80 % du pool de sélection automatique — bien trop agressif. Le seuil reste donc à `niche` (défaut inchangé). Ce cas précis n'est pas une erreur ETL (ses collaborateurs — Busta Flex, DJ Weedim, Biffty — sont de vrais artistes FR reconnus, donc probablement un vrai nom de scène/posse cut), contrairement à l'entrée fusionnée `¥$, Kanye West & Ty Dolla $ign` (3 crédits mergés en un seul artiste) qui, elle, a été exclue manuellement (`status = 'excluded'`, JSON local + Supabase) le 2026-07-31.
 
-**Encore ouvert :**
+**Encore ouvert (au 2026-07-31) :**
 - Cas d'un artiste "connu mais niche dans sa catégorie" (ex. tête d'affiche d'un sous-genre) : non traité différemment pour l'instant — le filtre ne regarde que `category`, pas de logique par sous-catégorie/scène.
 - La limite structurelle ci-dessus (catégorisation relative, pas absolue) reste vraie pour tout futur cas similaire à `2CheeseMilkShake` : un filtre par `category` seul ne suffira jamais à garantir "un nom reconnaissable", seulement "pas dans le palier le plus bas du classement interne".
+
+### 2.5 Mise à jour (2026-08-01) — `category` remplacé par une vraie donnée de popularité (Last.fm)
+
+**Ce qui change :** `assignCategory()` basé sur `fr_collab_count` (§6 ci-dessus) est **remplacé**, pas complété — un artiste peu connecté dans ce dataset local n'est pas forcément peu populaire dans la vraie vie (cas `2CheeseMilkShake` ci-dessus), et inversement. Deux sources de vérité en parallèle auraient été pires que le problème d'origine.
+
+**Pourquoi Last.fm et pas Spotify :** l'API Web Spotify a supprimé les champs `popularity` et `followers` de ses endpoints Get Artist en "Development Mode" (migration officielle de février 2026) ; Roland-Gamos n'a aucune app Spotify existante donc toute nouvelle app tomberait dans ce mode restreint — l'option "score `popularity` officiel Spotify" est donc indisponible en pratique. Les auditeurs mensuels Spotify n'ont de toute façon jamais été exposés par l'API officielle (uniquement visibles sur l'app/le site — scraping ou APIs tierces uniquement, zone grise ToS). Last.fm expose légalement et gratuitement `stats.listeners`/`stats.playcount` via `artist.getinfo`.
+
+**Schéma (migration `20260801000000_lastfm_popularity.sql`) :** `artists.lastfm_listeners` (int), `artists.lastfm_playcount` (bigint), `artists.lastfm_synced_at` (timestamptz, pour un refresh périodique futur — non automatisé pour l'instant, à lancer manuellement).
+
+**Pipeline (`npm run popularity:lastfm`, `src/scripts/computeLastfmPopularity.ts`) :**
+1. Ingestion : pour chaque artiste, interroge Last.fm par `mbid` (déjà résolu via MusicBrainz à l'ETL — priorité, évite les faux positifs sur homonymes) ou par nom en secours. Rate-limit conservateur (~3,3 req/s). Les artistes introuvables sur Last.fm sont loggés, pas bloquants.
+2. Catégorisation : **7 paliers** (au lieu de 5) en **quantiles relatifs** sur `lastfm_listeners` de tous les artistes — toujours pas de seuils absolus fixes, pour la même raison que documentée ci-dessus (§6). Nouveaux paliers `confidentiel` (sous `underground`) et `connu` (entre `intermediate` et `mainstream`) ; les 5 noms et multiplicateurs de bonus existants (`underground`=1.12 → `ultra_mainstream`=1.00 dans `ScoringService.calculateCategoryMult`) sont inchangés pour rester compatibles avec une éventuelle config `SOLO_MIN_ARTIST_CATEGORY` déjà déployée.
+3. Prérequis : `LASTFM_API_KEY` dans `.env` (créer une clé sur https://www.last.fm/api/account/create — **non fournie**, l'utilisateur doit l'ajouter avant de lancer le script en conditions réelles).
+
+**Qualification à l'ingestion (`push-to-supabase.ts`) :** un artiste nouvellement importé reçoit une catégorie **provisoire neutre** (`'intermediate'`) le temps qu'il soit synchronisé avec Last.fm — évite de le pénaliser ou de le favoriser à tort avant d'avoir une vraie donnée. `mbid` est désormais bien transmis à l'upsert Supabase (oubli corrigé — la colonne existait déjà en base mais n'était jamais peuplée par ce script, ce qui aurait cassé le matching par `mbid` prévu ici).
+
+**Lien avec le filtre Solo :** `src/config/soloArtistFilter.ts` réutilise directement `ArtistCategory`/`CATEGORY_RANK` sans dupliquer de logique de catégorisation — juste étendu à 7 valeurs. `SOLO_MIN_ARTIST_CATEGORY` reste à `'niche'` par défaut, ce qui exclut désormais `'confidentiel'` **et** `'underground'` (élargissement mécanique dû à l'ajout du palier `confidentiel` sous `underground`, pas un changement de seuil délibéré).
+
+**Non fait (hors scope de cette itération) :** refresh périodique automatique (cron) des `lastfm_listeners` — seule la colonne `lastfm_synced_at` existe pour le permettre plus tard ; critère de qualité minimal à l'ingestion ETL (avant même le premier passage Last.fm) — non implémenté, Last.fm n'étant interrogeable qu'après l'import.
 
 ---
 

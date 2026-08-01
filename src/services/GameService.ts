@@ -7,6 +7,7 @@ import { Turn, createTurn, InvalidReason } from '../types/Turn';
  */
 const TIMER_JOKER_BONUS_MS = 15000;
 import { gameDataStore } from './GameDataStore';
+import { scoringService, ArtistCategory } from './ScoringService';
 
 /**
  * Nombre maximum de tentatives par tour
@@ -414,24 +415,48 @@ export class GameService {
       usedArtists: [...game.usedArtists, canonicalId],
     };
 
+    // --- Calcul du score du coup (formule unifiée ScoringService, cf. Solo
+    // Infini/vs Bot — CLAUDE_3.md §2.2). Chaque coup validé rapporte son
+    // propre score, y compris chacun des 2 artistes d'un Combo.
+    const resolvedProposed = gameDataStore.resolveArtist(normalizedArtistName);
+    const prevIdForCollab = previousArtist?.gameId ?? (previousArtist ? gameDataStore.resolveArtist(previousArtist.name)?.id : undefined);
+    const collab = (prevIdForCollab && resolvedProposed)
+      ? gameDataStore.getCollaboration(prevIdForCollab, resolvedProposed.id)
+      : null;
+    const turnStart = (game.currentTurnEndsAt ?? Date.now()) - game.settings.turnDurationMs;
+    const fractionElapsed = Math.max(0, Math.min(1, (Date.now() - turnStart) / game.settings.turnDurationMs));
+    const scoring = scoringService.calculateScore({
+      category: (resolvedProposed?.category as ArtistCategory) ?? 'underground',
+      collabDegree: resolvedProposed?.collab_degree ?? 0,
+      pairFamilyCount: collab?.pair_family_count ?? 0,
+      turnNumber: gameAfterMove.usedArtists.length,
+      fractionElapsed,
+    });
+    const gameWithScore = {
+      ...gameAfterMove,
+      players: gameAfterMove.players.map((p) =>
+        p.id === playerId ? { ...p, score: (p.score ?? 0) + scoring.finalScore } : p
+      ),
+    };
+
     // Joker Combo actif et 1er artiste du tour validé : le joueur enchaîne
     // immédiatement un 2e artiste sans que la main ne passe (comboArtistsPlayed
     // passe à 1, en attente du 2e coup du même joueur — voir CLAUDE_3.md §7.2).
     if (game.turnJokerState?.comboArtistsPlayed === 0) {
       const comboGame = {
-        ...gameAfterMove,
+        ...gameWithScore,
         attemptsUsed: 0,
-        turnJokerState: { ...gameAfterMove.turnJokerState, comboArtistsPlayed: 1 },
+        turnJokerState: { ...gameWithScore.turnJokerState, comboArtistsPlayed: 1 },
       };
       return {
         isValid: true,
         turn: createTurn(playerId, normalizedArtistName, true, attemptsUsed, validation.source),
         game: comboGame,
-        message: `Premier artiste du combo validé ("${validation.canonical.name}"), proposez le second !`,
+        message: `Premier artiste du combo validé ("${validation.canonical.name}"), proposez le second ! +${scoring.finalScore} points`,
       };
     }
 
-    const updatedGame = this.moveToNextPlayer(gameAfterMove);
+    const updatedGame = this.moveToNextPlayer(gameWithScore);
 
     // Démarrer le tour suivant
     const finalGame = this.startTurn(updatedGame);
@@ -440,7 +465,7 @@ export class GameService {
       isValid: true,
       turn: createTurn(playerId, normalizedArtistName, true, attemptsUsed, validation.source),
       game: finalGame,
-      message: `Collaboration validée entre "${previousArtist?.name || 'début'}" et "${validation.canonical.name}" (${validation.source || 'local_store'}).`,
+      message: `Collaboration validée entre "${previousArtist?.name || 'début'}" et "${validation.canonical.name}" (${validation.source || 'local_store'}). +${scoring.finalScore} points`,
     };
   }
 

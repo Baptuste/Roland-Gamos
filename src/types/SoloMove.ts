@@ -14,7 +14,9 @@ export interface ScoringDetails {
   overflow: number; // Montant au-dessus du plafond (0 si pas de dépassement)
   pairFamilyCount: number; // Nombre de familles communes entre A et B
   degree: number; // collab_degree de l'artiste proposé
-  category: 'ultra_mainstream' | 'mainstream' | 'intermediate' | 'niche' | 'underground';
+  // Dupliqué depuis ScoringService.ArtistCategory (pas d'import direct : ScoringService
+  // importe déjà ScoringDetails depuis ce fichier, un import inverse créerait un cycle).
+  category: 'ultra_mainstream' | 'mainstream' | 'connu' | 'intermediate' | 'niche' | 'underground' | 'confidentiel';
   timeSpent: number; // Temps en secondes
   chainLength: number; // Longueur de la chaîne (tour actuel)
 }

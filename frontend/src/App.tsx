@@ -235,6 +235,9 @@ function App() {
     setCurrentGame(game);
     setCurrentPlayer(player);
     setCurrentScreen('multiplayer');
+    // Sans ça, Statistiques/Classement restent vides pour un joueur qui n'a
+    // jamais lancé de partie Solo (soloPlayerName reste null autrement).
+    setSoloPlayerName(player.name);
     if (code) {
       setGameCode(code);
       localStorage.setItem(STORAGE_KEYS.GAME_CODE, code);
@@ -247,8 +250,22 @@ function App() {
   const handleBackToHome = () => {
     setCurrentGame(null);
     setCurrentPlayer(null);
-    setSoloPlayerName(null);
+    // soloPlayerName n'est plus réinitialisé ici : c'est aussi l'identité
+    // utilisée par Statistiques/Classement, qui doivent rester consultables
+    // après une partie Multijoueur sans repasser par le Solo.
     setCurrentScreen('home');
+  };
+
+  const handleShowProfile = (playerName: string) => {
+    setSoloPlayerName(playerName);
+    // Identifier le joueur en base (fire and forget) — même pattern que handleStartSolo,
+    // pour qu'un joueur venu du Multijoueur ait aussi un profil consultable.
+    fetch(`${BACKEND_URL}/api/players/identify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: soloPlayerId, pseudo: playerName }),
+    }).catch(() => {});
+    setCurrentScreen('profile');
   };
 
   const handleStartSolo = (playerName: string) => {
@@ -349,9 +366,11 @@ function App() {
           onStartBot={handleStartBot}
           onShowLeaderboard={() => setCurrentScreen('leaderboard')}
           onShowStats={() => setCurrentScreen('stats')}
+          onShowProfile={handleShowProfile}
           initialGame={currentGame}
           initialPlayer={currentPlayer}
           initialGameCode={gameCode}
+          persistentPlayerId={soloPlayerId}
         />
       );
     }
@@ -372,7 +391,9 @@ function App() {
       onStartBot={handleStartBot}
       onShowLeaderboard={() => setCurrentScreen('leaderboard')}
       onShowStats={() => setCurrentScreen('stats')}
+      onShowProfile={handleShowProfile}
       onBackToHome={handleBackToHome}
+      persistentPlayerId={soloPlayerId}
     />
   );
 }

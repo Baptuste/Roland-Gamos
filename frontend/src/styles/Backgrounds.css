@@ -1,0 +1,151 @@
+/* ===== ROLAND GAMOS — Fonds d'écran animés ===== */
+/* Décors pixel art (croquis utilisateur) + accents CSS animés légers.
+   Les .deco-* sont des éléments décoratifs positionnés en absolu (top/left/
+   animationDelay passés en style inline depuis le composant), toujours
+   pointer-events:none pour ne jamais gêner l'UI. */
+
+.deco-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* --- Accueil : étoiles scintillantes + néons violets pulsants --- */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.deco-star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.6);
+  animation: twinkle 3.2s ease-in-out infinite;
+}
+
+@keyframes neonGlowPulse {
+  0%, 100% { opacity: 0.55; filter: blur(6px); }
+  50% { opacity: 1; filter: blur(9px); }
+}
+
+.deco-neon-bar {
+  position: absolute;
+  width: 10px;
+  border-radius: 6px;
+  background: #b070ff;
+  box-shadow: 0 0 18px 6px rgba(176, 112, 255, 0.65);
+  animation: neonGlowPulse 4s ease-in-out infinite;
+}
+
+/* --- Solo Infini : REC clignotant + vague audio --- */
+@keyframes recBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+
+.deco-rec-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff3344;
+  box-shadow: 0 0 8px 2px rgba(255, 51, 68, 0.8);
+  animation: recBlink 1.1s steps(2, start) infinite;
+}
+
+@keyframes waveShimmer {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.75; }
+}
+
+.deco-wave-glow {
+  position: absolute;
+  background: radial-gradient(ellipse at center, rgba(255, 176, 60, 0.5) 0%, transparent 70%);
+  animation: waveShimmer 2.4s ease-in-out infinite;
+}
+
+/* --- Multijoueur / Lobby : néon "PLANÈTE RAP" qui grésille --- */
+@keyframes signFlicker {
+  0%, 100% { opacity: 1; }
+  8% { opacity: 1; }
+  9% { opacity: 0.4; }
+  10% { opacity: 1; }
+  30% { opacity: 1; }
+  31% { opacity: 0.6; }
+  33% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.5; }
+  94% { opacity: 1; }
+}
+
+.deco-sign-glow {
+  position: absolute;
+  background: radial-gradient(ellipse at center, rgba(255, 70, 40, 0.55) 0%, transparent 70%);
+  animation: signFlicker 5s ease-in-out infinite;
+}
+
+/* --- Solo vs Bot : balayage de spots + flashs de téléphones --- */
+@keyframes spotSweep {
+  0% { transform: translateX(-15%) rotate(-3deg); opacity: 0.25; }
+  50% { transform: translateX(15%) rotate(3deg); opacity: 0.5; }
+  100% { transform: translateX(-15%) rotate(-3deg); opacity: 0.25; }
+}
+
+.deco-spot-sweep {
+  position: absolute;
+  top: -5%;
+  left: 10%;
+  width: 80%;
+  height: 45%;
+  background: conic-gradient(from 200deg at 50% 0%, transparent 0deg, rgba(255, 80, 80, 0.18) 15deg, transparent 30deg, transparent 330deg, rgba(120, 170, 255, 0.15) 345deg, transparent 360deg);
+  animation: spotSweep 6s ease-in-out infinite;
+}
+
+@keyframes phoneFlash {
+  0%, 96%, 100% { opacity: 0; }
+  97%, 99% { opacity: 1; }
+}
+
+.deco-phone-flash {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 10px 3px rgba(255, 255, 255, 0.9);
+  animation: phoneFlash 3.5s linear infinite;
+}
+
+/* --- Fin de partie : confettis scintillants + faisceaux dorés --- */
+@keyframes sparkleGold {
+  0%, 100% { opacity: 0.2; transform: translateY(0) scale(0.8); }
+  50% { opacity: 1; transform: translateY(-4px) scale(1.1); }
+}
+
+.deco-sparkle {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  animation: sparkleGold 2.6s ease-in-out infinite;
+}
+
+@keyframes beamPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.85; }
+}
+
+.deco-beam-glow {
+  position: absolute;
+  top: 0;
+  left: 20%;
+  width: 60%;
+  height: 55%;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 210, 90, 0.35) 0%, transparent 70%);
+  animation: beamPulse 3s ease-in-out infinite;
+}

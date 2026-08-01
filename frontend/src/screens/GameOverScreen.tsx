@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useFrameCycle } from '../hooks/useFrameCycle';
+
+const FIN_DE_PARTIE_FRAMES = Array.from(
+  { length: 6 },
+  (_, i) => `/assets/backgrounds-animated/fin-de-partie/frame-${i}.png`
+);
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -103,6 +109,7 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
     unlocks: CosmeticItem[];
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const bgFrame = useFrameCycle(FIN_DE_PARTIE_FRAMES, 220);
 
   const endpointPath = data.mode === 'Solo Infini'
     ? '/api/solo/infinite/finish'
@@ -137,7 +144,13 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
     return (
       <div style={{
         minHeight: '100vh',
-        background: 'linear-gradient(180deg, #06060f 0%, #0d0020 100%)',
+        position: 'relative',
+        isolation: 'isolate',
+        backgroundColor: '#06060f',
+        backgroundImage: `linear-gradient(180deg, rgba(6,6,15,0.55) 0%, rgba(6,6,15,0.8) 100%), url(${bgFrame})`,
+        backgroundSize: '384px 528px',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -246,7 +259,13 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(180deg, #06060f 0%, #0d0020 100%)',
+      position: 'relative',
+      isolation: 'isolate',
+      backgroundColor: '#06060f',
+      backgroundImage: `linear-gradient(180deg, rgba(6,6,15,0.6) 0%, rgba(6,6,15,0.85) 100%), url(${bgFrame})`,
+      backgroundSize: '384px 528px',
+      backgroundPosition: 'center top',
+      backgroundRepeat: 'no-repeat',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',

@@ -10,12 +10,12 @@ const TEAM_LABELS = ['Équipe A', 'Équipe B', 'Équipe C', 'Équipe D'];
 const TEAM_COLORS = ['var(--primary)', 'var(--secondary)', 'var(--accent)', 'var(--error)'];
 const JOKER_TYPES: JokerType[] = ['timer', 'skip', 'combo', 'bouclier', 'archives', 'resurrection'];
 const JOKER_LABELS: Record<JokerType, string> = {
-  timer: 'Timer',
+  timer: 'Sursis',
   skip: 'Skip',
   combo: 'Combo',
-  bouclier: 'Bouclier',
+  bouclier: 'Blindage',
   archives: 'Archives',
-  resurrection: 'Résurrection',
+  resurrection: 'Second Souffle',
 };
 const JOKER_SHORT: Record<JokerType, string> = {
   timer: '⏱',
@@ -24,6 +24,15 @@ const JOKER_SHORT: Record<JokerType, string> = {
   bouclier: '🛡',
   archives: '📜',
   resurrection: '✝',
+};
+// Icônes pixel art générées (PixelLab).
+const JOKER_ICON: Partial<Record<JokerType, string>> = {
+  timer: '/assets/jokers/timer.png',
+  skip: '/assets/jokers/skip.png',
+  combo: '/assets/jokers/combo.png',
+  bouclier: '/assets/jokers/bouclier.png',
+  archives: '/assets/jokers/archives.png',
+  resurrection: '/assets/jokers/resurrection.png',
 };
 
 /**
@@ -65,6 +74,10 @@ export default function MultiplayerGameScreen({
   const [hints, setHints] = useState<string[]>([]);
   const [showHints, setShowHints] = useState(false);
   const [showResurrectionPicker, setShowResurrectionPicker] = useState(false);
+  const [finishResult, setFinishResult] = useState<{
+    xp: { gained: number; total: number; level: number; leveledUp: boolean; prestige: string } | null;
+    unlocks: any[];
+  } | null>(null);
 
   const gameService = new GameService();
   const currentPlayer = gameService.getCurrentPlayer(game);
@@ -164,6 +177,16 @@ export default function MultiplayerGameScreen({
       setArtistName('');
       setIsSubmitting(false);
       setLastMessage(null);
+      setFinishResult(null);
+    };
+
+    const handleGameFinishResult = (data: {
+      gameId: string;
+      xp: { gained: number; total: number; level: number; leveledUp: boolean; prestige: string } | null;
+      unlocks: any[];
+    }) => {
+      if (data.gameId !== game.id) return;
+      setFinishResult({ xp: data.xp, unlocks: data.unlocks });
     };
 
     const handleError = (data: { message: string }) => {
@@ -183,6 +206,7 @@ export default function MultiplayerGameScreen({
     socketService.on('game-updated', handleGameUpdated);
     socketService.on('game-started', handleGameStarted);
     socketService.on('game-reset', handleGameReset);
+    socketService.on('game-finish-result', handleGameFinishResult);
     socketService.on('error', handleError);
     socketService.on('game-state', (data) => {
       setGame(data.game);
@@ -203,6 +227,7 @@ export default function MultiplayerGameScreen({
       socketService.off('game-updated', handleGameUpdated);
       socketService.off('game-started', handleGameStarted);
       socketService.off('game-reset', handleGameReset);
+      socketService.off('game-finish-result', handleGameFinishResult);
       socketService.off('game-reconnected', () => {});
       socketService.off('error', handleError);
     };
@@ -253,28 +278,92 @@ export default function MultiplayerGameScreen({
                   const teamIds = getTeamIds(game.settings.teamCount);
                   const teamIdx = winningTeamId ? teamIds.indexOf(winningTeamId) : -1;
                   const teamMembers = game.players.filter((p) => p.teamId === winningTeamId);
+                  const mvp = [...game.players].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
                   return (
-                    <div className="winner-section">
-                      <p className="winner-text" style={{ color: teamIdx >= 0 ? TEAM_COLORS[teamIdx] : undefined }}>
-                        <strong>{teamIdx >= 0 ? TEAM_LABELS[teamIdx] : 'Une équipe'}</strong> a gagné !
-                      </p>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        {teamMembers.map((m) => m.name).join(', ')}
-                      </p>
-                    </div>
+                    <>
+                      <div className="winner-section">
+                        <p className="winner-text" style={{ color: teamIdx >= 0 ? TEAM_COLORS[teamIdx] : undefined }}>
+                          <strong>{teamIdx >= 0 ? TEAM_LABELS[teamIdx] : 'Une équipe'}</strong> a gagné !
+                        </p>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                          {teamMembers.map((m) => m.name).join(', ')}
+                        </p>
+                      </div>
+                      {mvp && (
+                        <div style={{
+                          marginTop: '0.75rem', padding: '0.6rem 1rem', borderRadius: 6,
+                          border: '2px solid var(--accent)', background: 'rgba(255,215,0,0.08)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
+                        }}>
+                          <span style={{ fontSize: '0.65rem', letterSpacing: 1, color: 'var(--accent)' }}>🏆 MEILLEUR JOUEUR</span>
+                          <span style={{ fontWeight: 700, flex: 1, textAlign: 'center' }}>{mvp.name}</span>
+                          <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{(mvp.score ?? 0).toLocaleString()} pts</span>
+                        </div>
+                      )}
+                    </>
                   );
                 })()
               ) : (
                 <p className="winner-text">Toutes les équipes ont été éliminées</p>
               )
-            ) : activePlayers.length > 0 ? (
-              <div className="winner-section">
-                <p className="winner-text">
-                  <strong>{activePlayers[0].name}</strong> a gagné !
-                </p>
-              </div>
             ) : (
-              <p className="winner-text">Tous les joueurs ont été éliminés</p>
+              (() => {
+                const ranked = [...game.players].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+                const winnerId = activePlayers[0]?.id;
+                const MEDALS = ['🥇', '🥈', '🥉'];
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    {ranked.map((p, i) => (
+                      <div key={p.id} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '0.5rem 0.75rem', borderRadius: 4,
+                        background: i === 0 ? 'rgba(255,215,0,0.08)' : 'var(--bg-surface)',
+                        border: `1px solid ${i === 0 ? 'var(--accent)' : 'var(--border)'}`,
+                      }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: i < 3 ? '1.1rem' : '0.85rem', minWidth: 24, textAlign: 'center' }}>
+                            {MEDALS[i] || `#${i + 1}`}
+                          </span>
+                          <span style={{ fontWeight: 700 }}>{p.name}</span>
+                          {p.id === winnerId && (
+                            <span className="status-badge status-current" style={{ fontSize: '0.6rem' }}>Vainqueur</span>
+                          )}
+                        </span>
+                        <span style={{ fontWeight: 700, color: i === 0 ? 'var(--accent)' : 'var(--primary)' }}>
+                          {(p.score ?? 0).toLocaleString()} pts
+                        </span>
+                      </div>
+                    ))}
+                    {!winnerId && (
+                      <p className="winner-text mt-2" style={{ fontSize: '0.8rem' }}>Tous les joueurs ont été éliminés</p>
+                    )}
+                  </div>
+                );
+              })()
+            )}
+            {finishResult?.xp && (
+              <div style={{
+                marginTop: '0.75rem', padding: '0.6rem 1rem', borderRadius: 6,
+                border: '2px solid var(--primary)', background: 'rgba(155,89,255,0.08)',
+                display: 'flex', flexDirection: 'column', gap: '0.35rem',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--primary)' }}>✨ +{finishResult.xp.gained} XP</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Niveau {finishResult.xp.level} · {finishResult.xp.prestige}
+                  </span>
+                </div>
+                {finishResult.xp.leveledUp && (
+                  <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent)', textAlign: 'center' }}>
+                    🎉 Niveau supérieur !
+                  </p>
+                )}
+                {finishResult.unlocks.length > 0 && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--accent)', textAlign: 'center' }}>
+                    🔓 {finishResult.unlocks.length} nouveau{finishResult.unlocks.length > 1 ? 'x' : ''} déblocage{finishResult.unlocks.length > 1 ? 's' : ''} !
+                  </p>
+                )}
+              </div>
             )}
             <div className="finished-actions mt-3">
               {game.players[0].id === currentPlayerId && (
@@ -437,7 +526,12 @@ export default function MultiplayerGameScreen({
                           disabled={disabled}
                           title={JOKER_LABELS[type]}
                         >
-                          {JOKER_SHORT[type]} {JOKER_LABELS[type]} ({stock})
+                          {JOKER_ICON[type] ? (
+                            <img src={JOKER_ICON[type]} alt="" className="joker-icon-img" />
+                          ) : (
+                            JOKER_SHORT[type]
+                          )}{' '}
+                          {JOKER_LABELS[type]} ({stock})
                         </button>
                       );
                     })}
@@ -515,6 +609,9 @@ export default function MultiplayerGameScreen({
                   <div className="player-item-name">
                     {player.name}
                     {isMe && ' (Vous)'}
+                    <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent)' }}>
+                      {(player.score ?? 0).toLocaleString()} pts
+                    </span>
                   </div>
                   <div className="player-item-status">
                     {isCurrent && !isGameFinished && (
@@ -535,7 +632,11 @@ export default function MultiplayerGameScreen({
                     <div className="joker-slots">
                       {flattenJokerStock(player.jokerStock).map((type, i) => (
                         <span key={i} className="joker-slot" title={JOKER_LABELS[type]}>
-                          {JOKER_SHORT[type]}
+                          {JOKER_ICON[type] ? (
+                            <img src={JOKER_ICON[type]} alt="" className="joker-icon-img joker-icon-img--small" />
+                          ) : (
+                            JOKER_SHORT[type]
+                          )}
                         </span>
                       ))}
                     </div>

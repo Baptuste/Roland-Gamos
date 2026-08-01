@@ -14,6 +14,9 @@ interface PlayerStats {
   totalScore: number;
   botWins: number;
   botLosses: number;
+  multiplayerWins: number;
+  multiplayerLosses: number;
+  bestMultiplayerScore: number;
 }
 
 interface StatsScreenProps {
@@ -26,6 +29,7 @@ function emptyStats(): PlayerStats {
     totalGames: 0, totalSoloGames: 0, totalBotGames: 0, totalMultiplayerGames: 0,
     bestSoloScore: 0, bestSoloTurns: 0, bestBotScore: 0, totalScore: 0,
     botWins: 0, botLosses: 0,
+    multiplayerWins: 0, multiplayerLosses: 0, bestMultiplayerScore: 0,
   };
 }
 
@@ -41,6 +45,9 @@ function fromApiStats(data: any): PlayerStats {
     totalScore: data.total_score || 0,
     botWins: data.bot_wins || 0,
     botLosses: data.bot_losses || 0,
+    multiplayerWins: data.multiplayer_wins || 0,
+    multiplayerLosses: data.multiplayer_losses || 0,
+    bestMultiplayerScore: data.best_multiplayer_score || 0,
   };
 }
 
@@ -84,6 +91,9 @@ export default function StatsScreen({ playerName, onBackToHome }: StatsScreenPro
     { label: 'Score total', value: stats.totalScore, icon: '💎' },
     { label: 'Victoires vs Bot', value: stats.botWins, icon: '✅' },
     { label: 'Défaites vs Bot', value: stats.botLosses, icon: '❌' },
+    { label: 'Victoires multijoueur', value: stats.multiplayerWins, icon: '🏅' },
+    { label: 'Défaites multijoueur', value: stats.multiplayerLosses, icon: '💀' },
+    { label: 'Meilleur score multijoueur', value: stats.bestMultiplayerScore, icon: '👑' },
   ];
 
   return (

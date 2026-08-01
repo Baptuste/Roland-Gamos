@@ -4,8 +4,14 @@ import { useSoloInfiniteGame } from '../hooks/useSoloInfiniteGame';
 import { useArtistAutocomplete } from '../hooks/useArtistAutocomplete';
 import GameOverScreen from './GameOverScreen';
 import '../styles/GameScreen.css';
+import '../styles/Backgrounds.css';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+// NOTE provisoire : fond animé PixelLab pas encore généré pour cet écran (quota
+// de génération du compte PixelLab épuisé — 40/40 trial, 0$ crédit). En
+// attendant, on garde le croquis statique + décor CSS (cf. Backgrounds.css).
+// TODO: régénérer via src/scripts/assets/generateAnimatedBackgrounds.ts solo-infini
+// une fois le compte rechargé, puis appliquer le même pattern que l'Accueil.
 
 interface SoloInfiniteScreenProps {
   playerName: string;
@@ -130,7 +136,11 @@ export default function SoloInfiniteScreen({ playerName, playerId, onBackToHome,
   }
 
   return (
-    <div className="game-screen">
+    <div className="game-screen game-screen--solo-infini">
+      <div className="deco-layer">
+        <span className="deco-rec-dot" style={{ top: '11%', left: '90%' }} />
+        <div className="deco-wave-glow" style={{ top: '45%', left: '30%', width: '40%', height: '15%' }} />
+      </div>
       <div className="container">
         {/* Header */}
         <div className="game-header">

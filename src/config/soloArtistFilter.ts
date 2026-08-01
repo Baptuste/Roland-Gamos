@@ -3,19 +3,22 @@
  * (Solo Infini + Solo vs Bot uniquement — jamais en Multijoueur, où seuls
  * les joueurs choisissent, jamais le jeu).
  *
- * Remplace l'idée d'un seuil sur artists.popularity (colonne jamais peuplée,
- * pipeline jobs/popularity supprimé) par un seuil sur artists.category,
- * qui lui est réellement peuplé (assignCategory() basé sur fr_collab_count).
+ * Seuil sur artists.category, calculé par npm run popularity:lastfm à partir
+ * de artists.lastfm_listeners (quantiles relatifs sur 7 paliers — remplace
+ * l'ancien proxy fr_collab_count, cf. CLAUDE_3.md §2.5).
  */
 
-export type ArtistCategory = 'ultra_mainstream' | 'mainstream' | 'intermediate' | 'niche' | 'underground';
+import { ArtistCategory } from '../services/ScoringService';
+export type { ArtistCategory };
 
 const CATEGORY_RANK: Record<ArtistCategory, number> = {
-  underground: 0,
-  niche: 1,
-  intermediate: 2,
-  mainstream: 3,
-  ultra_mainstream: 4,
+  confidentiel: 0,
+  underground: 1,
+  niche: 2,
+  intermediate: 3,
+  connu: 4,
+  mainstream: 5,
+  ultra_mainstream: 6,
 };
 
 export function categoryRank(category: string | undefined | null): number {
@@ -26,8 +29,10 @@ export function categoryRank(category: string | undefined | null): number {
  * Catégorie minimale en dessous de laquelle un artiste est exclu de la
  * sélection automatique en Solo (seed de partie, choix du bot).
  * Configurable via SOLO_MIN_ARTIST_CATEGORY — valeurs possibles :
- * 'underground' | 'niche' | 'intermediate' | 'mainstream' | 'ultra_mainstream'.
- * Défaut 'niche' : exclut uniquement 'underground' (le palier le plus confidentiel).
+ * 'confidentiel' | 'underground' | 'niche' | 'intermediate' | 'connu' | 'mainstream' | 'ultra_mainstream'.
+ * Défaut 'niche' : exclut 'confidentiel' et 'underground' (les 2 paliers les plus
+ * obscurs — l'ajout du palier 'confidentiel' sous 'underground' élargit légèrement
+ * l'exclusion par défaut par rapport à l'ancien système à 5 paliers).
  * Seuil exact à ajuster empiriquement une fois en jeu — voir CLAUDE_3.md.
  */
 const envValue = process.env.SOLO_MIN_ARTIST_CATEGORY as ArtistCategory | undefined;

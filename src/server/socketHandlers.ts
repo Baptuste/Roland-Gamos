@@ -52,12 +52,13 @@ export function setupSocketHandlers(io: Server, gameManager: GameManager) {
     console.log(`Client connecté: ${socket.id}`);
 
     // Créer une partie
-    socket.on('create-game', (data: { playerName: string; settings?: Partial<GameSettings> }) => {
+    socket.on('create-game', (data: { playerName: string; settings?: Partial<GameSettings>; persistentId?: string }) => {
       try {
         const { gameId, gameCode, player, game } = gameManager.createGame(
           data.playerName,
           socket.id,
-          sanitizeSettings(data.settings)
+          sanitizeSettings(data.settings),
+          data.persistentId
         );
         socket.join(gameId);
         socket.emit('game-created', { gameId, gameCode, player, game });
@@ -226,10 +227,10 @@ export function setupSocketHandlers(io: Server, gameManager: GameManager) {
     });
 
     // Rejoindre une partie
-    socket.on('join-game', (data: { gameCode: string; playerName: string }) => {
+    socket.on('join-game', (data: { gameCode: string; playerName: string; persistentId?: string }) => {
       try {
         console.log(`Tentative de rejoindre la partie avec le code: ${data.gameCode}`);
-        const result = gameManager.joinGame(data.gameCode, data.playerName, socket.id);
+        const result = gameManager.joinGame(data.gameCode, data.playerName, socket.id, data.persistentId);
         
         if (!result) {
           console.log(`Impossible de rejoindre la partie avec le code: ${data.gameCode}`);

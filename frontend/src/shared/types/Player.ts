@@ -7,13 +7,17 @@ export interface Player {
   livesRemaining: number;
   jokerStock?: Partial<Record<JokerType, number>>;
   teamId?: string;
+  score: number;
+  persistentId?: string;
 }
 
-export function createPlayer(id: string, name: string, maxLives: number = 1): Player {
+export function createPlayer(id: string, name: string, maxLives: number = 1, persistentId?: string): Player {
   return {
     id,
     name,
     isEliminated: false,
     livesRemaining: maxLives,
+    score: 0,
+    persistentId,
   };
 }
