@@ -17,6 +17,7 @@ export interface GameArtist {
   degree_bonus: number;
   collab_degree: number; // nombre de collaborateurs distincts (offline job computeArtistMetrics)
   lastfm_listeners: number | null; // auditeurs Last.fm (npm run popularity:lastfm) — null si jamais synchronisé
+  is_francophone: boolean | null; // npm run francophone:compute — null si jamais synchronisé
 }
 
 /**
@@ -79,7 +80,7 @@ export class GameDataStore {
       while (true) {
         const { data, error: artistError } = await supabase!
           .from('artists')
-          .select('id, genius_id, name, image_url, category, category_bonus, degree_bonus, collab_degree, lastfm_listeners, status')
+          .select('id, genius_id, name, image_url, category, category_bonus, degree_bonus, collab_degree, lastfm_listeners, is_francophone, status')
           .in('status', ['included', 'needs_review'])
           .range(from, from + PAGE_SIZE - 1);
 
@@ -143,6 +144,7 @@ export class GameDataStore {
         degree_bonus: Number(a.degree_bonus) || 0,
         collab_degree: Number(a.collab_degree) || 0,
         lastfm_listeners: a.lastfm_listeners != null ? Number(a.lastfm_listeners) : null,
+        is_francophone: a.is_francophone != null ? Boolean(a.is_francophone) : null,
       };
       this.artists.set(geniusId, artist);
     }
@@ -222,6 +224,7 @@ export class GameDataStore {
         degree_bonus: 0,
         collab_degree: 0,
         lastfm_listeners: a.lastfm_listeners != null ? Number(a.lastfm_listeners) : null,
+        is_francophone: a.is_francophone != null ? Boolean(a.is_francophone) : null,
       });
     }
 

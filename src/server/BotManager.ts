@@ -52,7 +52,13 @@ export class BotManager {
   private runLocks: Map<string, boolean> = new Map();
 
   private chooseSeedArtist(): CanonicalArtist {
-    const seed = gameDataStore.getRandomSeedArtist(a => meetsMinCategory(a.category));
+    // Débuts de partie francophones uniquement (npm run francophone:compute) —
+    // repli sur le filtre catégorie seul si aucun candidat francophone trouvé
+    // (ex: sync jamais lancée), voir SoloManager.chooseSeedArtist pour le
+    // même raisonnement.
+    const seed =
+      gameDataStore.getRandomSeedArtist(a => meetsMinCategory(a.category) && a.is_francophone === true) ||
+      gameDataStore.getRandomSeedArtist(a => meetsMinCategory(a.category));
     if (!seed) return { name: 'Booba', gameId: undefined };
     return { name: seed.name, gameId: seed.id };
   }

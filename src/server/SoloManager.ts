@@ -24,7 +24,16 @@ export class SoloManager {
   // -------------------------------------------------------
 
   private chooseSeedArtist(): CanonicalArtist {
-    const artist = gameDataStore.getRandomSeedArtist(a => meetsMinCategory(a.category));
+    // Débuts de partie francophones uniquement (npm run francophone:compute) —
+    // le graphe de collaborations peut ensuite dériver vers des artistes non
+    // francophones via des featurings internationaux, seule l'ouverture est
+    // contrainte. Repli sur le filtre catégorie seul si aucun candidat
+    // francophone n'est trouvé (ex: sync jamais lancée) — getRandomSeedArtist
+    // gère déjà l'assouplissement du filtre de connectivité en dernier
+    // recours, jamais de plantage.
+    const artist =
+      gameDataStore.getRandomSeedArtist(a => meetsMinCategory(a.category) && a.is_francophone === true) ||
+      gameDataStore.getRandomSeedArtist(a => meetsMinCategory(a.category));
     if (!artist) {
       // Fallback si le store est vide (ne devrait pas arriver)
       return { name: 'Booba' };
