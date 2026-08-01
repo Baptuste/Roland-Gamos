@@ -16,6 +16,7 @@ export interface GameArtist {
   category_bonus: number;
   degree_bonus: number;
   collab_degree: number; // nombre de collaborateurs distincts (offline job computeArtistMetrics)
+  lastfm_listeners: number | null; // auditeurs Last.fm (npm run popularity:lastfm) — null si jamais synchronisé
 }
 
 /**
@@ -44,6 +45,8 @@ export class GameDataStore {
   private collaborations: Map<string, GameCollaboration> = new Map(); // "id1|id2" -> collab
   private collaboratorIndex: Map<number, Set<number>> = new Map(); // artist_id -> Set<collaborator_ids>
   private ready = false;
+  private maxCollabDegree = 0;
+  private maxListeners = 0;
 
   /**
    * Charge les donnees au demarrage
@@ -76,7 +79,7 @@ export class GameDataStore {
       while (true) {
         const { data, error: artistError } = await supabase!
           .from('artists')
-          .select('id, genius_id, name, image_url, category, category_bonus, degree_bonus, collab_degree, status')
+          .select('id, genius_id, name, image_url, category, category_bonus, degree_bonus, collab_degree, lastfm_listeners, status')
           .in('status', ['included', 'needs_review'])
           .range(from, from + PAGE_SIZE - 1);
 
@@ -139,6 +142,7 @@ export class GameDataStore {
         category_bonus: Number(a.category_bonus) || 40,
         degree_bonus: Number(a.degree_bonus) || 0,
         collab_degree: Number(a.collab_degree) || 0,
+        lastfm_listeners: a.lastfm_listeners != null ? Number(a.lastfm_listeners) : null,
       };
       this.artists.set(geniusId, artist);
     }
@@ -217,6 +221,7 @@ export class GameDataStore {
         category_bonus: 40,
         degree_bonus: 0,
         collab_degree: 0,
+        lastfm_listeners: a.lastfm_listeners != null ? Number(a.lastfm_listeners) : null,
       });
     }
 
@@ -274,6 +279,16 @@ export class GameDataStore {
     for (const [, artist] of this.artists) {
       artist.collab_degree = this.collaboratorIndex.get(artist.id)?.size ?? 0;
     }
+
+    // Bornes pour normaliser degré/auditeurs en un score 0..1 (getArtistFamiliarity)
+    // — recalculées depuis les données réellement chargées plutôt que des seuils
+    // en dur, pour rester valables après un nettoyage ou une resynchro Last.fm.
+    for (const [, artist] of this.artists) {
+      if (artist.collab_degree > this.maxCollabDegree) this.maxCollabDegree = artist.collab_degree;
+      if (artist.lastfm_listeners && artist.lastfm_listeners > this.maxListeners) {
+        this.maxListeners = artist.lastfm_listeners;
+      }
+    }
   }
 
   // ============================================================
@@ -324,6 +339,31 @@ export class GameDataStore {
    */
   getArtistById(id: number): GameArtist | null {
     return this.artists.get(id) || null;
+  }
+
+  /**
+   * Score de "familiarité" 0..1 d'un artiste — combine son degré de
+   * collaboration (collab_degree) et ses auditeurs Last.fm (lastfm_listeners),
+   * chacun normalisé en échelle log par rapport au maximum réellement présent
+   * dans le jeu de données (pas de seuil en dur). 1 = très connu/connecté,
+   * 0 = confidentiel et peu relié. Utilisé pour moduler la difficulté du bot
+   * (BotManager) sur la popularité réelle de la position plutôt que sur le
+   * seul palier de catégorie (7 paliers, plus grossier).
+   */
+  getArtistFamiliarity(id: number): number {
+    const artist = this.artists.get(id);
+    if (!artist) return 0;
+
+    const degreeScore = this.maxCollabDegree > 0
+      ? Math.log1p(artist.collab_degree) / Math.log1p(this.maxCollabDegree)
+      : 0;
+
+    if (!artist.lastfm_listeners || this.maxListeners <= 0) {
+      return degreeScore; // pas de donnée auditeurs — dégrade sur le degré seul
+    }
+
+    const listenersScore = Math.log1p(artist.lastfm_listeners) / Math.log1p(this.maxListeners);
+    return (degreeScore + listenersScore) / 2;
   }
 
   /**

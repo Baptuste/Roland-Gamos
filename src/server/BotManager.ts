@@ -6,7 +6,6 @@ import { scoringService, ArtistCategory } from '../services/ScoringService';
 import { meetsMinCategory } from '../config/soloArtistFilter';
 
 const TURN_DURATION_MS = 30000;
-const BOT_DIFFICULTY_THRESHOLDS = [5, 7, 10];
 
 export interface BotGameMoveResult {
   playerMove: {
@@ -87,11 +86,37 @@ export class BotManager {
     return run;
   }
 
-  private getBotErrorProbability(turn: number): number {
-    if (turn <= BOT_DIFFICULTY_THRESHOLDS[0]) return 0.05;
-    if (turn <= BOT_DIFFICULTY_THRESHOLDS[1]) return 0.12;
-    if (turn <= BOT_DIFFICULTY_THRESHOLDS[2]) return 0.20;
-    return 0.30;
+  /**
+   * Probabilité d'erreur du bot — combine trois facteurs plutôt qu'un simple
+   * numéro de tour, pour que la difficulté reflète le chemin réellement pris
+   * dans la partie plutôt qu'un script figé indépendant du jeu :
+   *  - une base par tour plus douce qu'avant (accessible en début de partie) ;
+   *  - la rareté des collaborateurs valides encore disponibles dans CETTE
+   *    partie (acculer le bot dans un coin le rend réalistement plus
+   *    faillible — récompense un joueur qui pousse vers un cul-de-sac) ;
+   *  - la familiarité réelle de l'artiste courant (GameDataStore.getArtistFamiliarity
+   *    — combine collab_degree ET auditeurs Last.fm sur une échelle continue
+   *    0..1, normalisée sur les données réellement chargées plutôt que sur le
+   *    seul palier de catégorie à 7 crans) : dérailler vers un artiste peu
+   *    connu/peu connecté est objectivement plus dur à naviguer.
+   */
+  private getBotErrorProbability(turn: number, availableCount: number, familiarity: number): number {
+    let base: number;
+    if (turn <= 3) base = 0.03;
+    else if (turn <= 6) base = 0.08;
+    else if (turn <= 10) base = 0.15;
+    else base = 0.22;
+
+    let scarcity = 0;
+    if (availableCount <= 1) scarcity = 0.25;
+    else if (availableCount <= 3) scarcity = 0.12;
+    else if (availableCount <= 6) scarcity = 0.05;
+
+    // familiarity ∈ [0,1] : 0 = confidentiel/isolé (rarity max), 1 = très
+    // connu/connecté (aucun bonus). Échelle continue au lieu de paliers.
+    const rarity = (1 - familiarity) * 0.15;
+
+    return Math.min(0.45, base + scarcity + rarity);
   }
 
   private botChooseArtist(run: BotGameRun): CanonicalArtist | null {
@@ -113,8 +138,9 @@ export class BotManager {
     const wellKnown = available.filter(id => meetsMinCategory(gameDataStore.getArtistById(id)?.category));
     if (wellKnown.length > 0) available = wellKnown;
 
-    // Simuler une erreur selon la difficulté
-    const errorProb = this.getBotErrorProbability(run.currentTurn);
+    // Simuler une erreur selon la difficulté réelle de la position actuelle
+    const familiarity = gameDataStore.getArtistFamiliarity(currentId);
+    const errorProb = this.getBotErrorProbability(run.currentTurn, available.length, familiarity);
     if (Math.random() < errorProb) return null;
 
     const chosenId = available[Math.floor(Math.random() * available.length)];
