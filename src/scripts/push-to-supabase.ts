@@ -100,7 +100,6 @@ async function main() {
         name: a.name,
         image_url: a.image_url || null,
         status: a.status,
-        mbid: a.mbid || null,
         category,
         category_bonus,
       };

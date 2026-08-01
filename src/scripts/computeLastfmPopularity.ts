@@ -164,7 +164,7 @@ async function main() {
   while (true) {
     const { data, error } = await supabase
       .from('artists')
-      .select('id, name, mbid')
+      .select('id, name')
       .range(from, from + PAGE_SIZE - 1);
     if (error) {
       console.error('Fetch artists error:', error.message);
@@ -173,9 +173,12 @@ async function main() {
     if (!data || data.length === 0) break;
 
     for (const artist of data) {
-      const info = await fetchLastfmArtistInfo(apiKey, { mbid: artist.mbid, name: artist.name });
+      // Pas de colonne mbid en base (jamais peuplée par l'ETL — vérifié : 0/21141
+      // artistes locaux ont un mbid malgré le champ optionnel sur ETLArtist),
+      // donc matching par nom uniquement pour l'instant.
+      const info = await fetchLastfmArtistInfo(apiKey, { name: artist.name });
       if (info) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('artists')
           .update({
             lastfm_listeners: info.listeners,
@@ -183,6 +186,10 @@ async function main() {
             lastfm_synced_at: new Date().toISOString(),
           })
           .eq('id', artist.id);
+        if (updateError) {
+          console.error(`\nUpdate error for artist ${artist.id} (${artist.name}):`, updateError.message);
+          process.exit(1);
+        }
         ingested++;
       } else {
         notFound++;
