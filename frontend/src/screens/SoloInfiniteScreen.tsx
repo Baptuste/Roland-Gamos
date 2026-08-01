@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { SoloRunStatus } from '../shared/types';
 import { useSoloInfiniteGame } from '../hooks/useSoloInfiniteGame';
 import { useArtistAutocomplete } from '../hooks/useArtistAutocomplete';
@@ -6,7 +6,7 @@ import GameOverScreen from './GameOverScreen';
 import '../styles/GameScreen.css';
 import '../styles/Backgrounds.css';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL } from '../services/backendUrl';
 // NOTE provisoire : fond animé PixelLab pas encore généré pour cet écran (quota
 // de génération du compte PixelLab épuisé — 40/40 trial, 0$ crédit). En
 // attendant, on garde le croquis statique + décor CSS (cf. Backgrounds.css).

@@ -4,7 +4,7 @@ import { checkUnlocks, triggerUnlock } from './UnlockService';
 
 /**
  * Traite la fin d'une run/partie pour un joueur : upsert leaderboard, mise à
- * jour player_stats (par pseudo) + players.total_score, calcul XP + unlocks.
+ * jour player_stats (par player_id) + players.total_score, calcul XP + unlocks.
  * Partagé entre les endpoints de fin de partie Solo (appelés par
  * GameOverScreen) et le Multijoueur (appelé directement côté serveur par
  * GameManager dès que game.status passe à FINISHED — pas de round-trip
@@ -20,6 +20,13 @@ export async function handleGameFinish(params: {
   multiWin?: boolean;
   overflowCount?: number;
   overflowXpBonus?: number;
+  /**
+   * genius_id (clé interne GameDataStore) de chaque artiste apparu dans la
+   * partie — sert à alimenter le codex/carte galaxie ("découverte" par
+   * joueur, CLAUDE_3.md / vision produit du 2026-08-01). Optionnel : si
+   * absent, aucune découverte n'est enregistrée pour cette partie.
+   */
+  encounteredGeniusIds?: number[];
 }): Promise<{
   leaderboard: { rank: number; score: number } | null;
   xp: { gained: number; total: number; level: number; leveledUp: boolean; prestige: string } | null;
@@ -61,9 +68,10 @@ export async function handleGameFinish(params: {
   // 2. Stats
   try {
     const { data: existing } = await supabase
-      .from('player_stats').select('*').eq('player_name', params.playerName).single();
+      .from('player_stats').select('*').eq('player_id', params.playerId).single();
 
     const s: Record<string, any> = existing || {
+      player_id: params.playerId,
       player_name: params.playerName,
       total_games: 0, total_solo_games: 0, total_bot_games: 0, total_multiplayer_games: 0,
       best_solo_score: 0, best_solo_turns: 0, best_bot_score: 0,
@@ -94,7 +102,7 @@ export async function handleGameFinish(params: {
 
     s.updated_at = new Date().toISOString();
     await supabase.from('player_stats')
-      .upsert({ ...s, player_name: params.playerName }, { onConflict: 'player_name' });
+      .upsert({ ...s, player_id: params.playerId, player_name: params.playerName }, { onConflict: 'player_id' });
   } catch { /* stats non critique */ }
 
   // 3. XP (+ bonus XP non cappé si dépassement du plafond de score — CLAUDE_3.md §2.3)
@@ -104,7 +112,7 @@ export async function handleGameFinish(params: {
   const { data: statsRow } = await supabase
     .from('player_stats')
     .select('multiplayer_wins, bot_wins, best_solo_score, overflow_count')
-    .eq('player_name', params.playerName)
+    .eq('player_id', params.playerId)
     .single();
 
   const newUnlocks = await checkUnlocks(params.playerId, xpResult.newLevel, statsRow || {});
@@ -120,6 +128,23 @@ export async function handleGameFinish(params: {
         .update({ total_score: (pRow.total_score || 0) + params.score })
         .eq('id', params.playerId);
     } catch { /* non critique */ }
+  }
+
+  // 6. Codex — enregistrer les artistes découverts pendant cette partie
+  if (params.encounteredGeniusIds && params.encounteredGeniusIds.length > 0) {
+    try {
+      const uniqueGeniusIds = Array.from(new Set(params.encounteredGeniusIds));
+      const { data: artistRows } = await supabase
+        .from('artists')
+        .select('id')
+        .in('genius_id', uniqueGeniusIds);
+      if (artistRows && artistRows.length > 0) {
+        await supabase.from('artist_discoveries').upsert(
+          artistRows.map((a) => ({ player_id: params.playerId, artist_id: a.id })),
+          { onConflict: 'player_id,artist_id', ignoreDuplicates: true }
+        );
+      }
+    } catch { /* non critique — ne doit jamais bloquer la fin de partie */ }
   }
 
   return {

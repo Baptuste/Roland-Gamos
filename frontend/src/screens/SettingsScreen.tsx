@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import '../styles/HomeScreen.css';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL } from '../services/backendUrl';
 
 interface SettingsScreenProps {
   playerId: string;
@@ -78,9 +79,10 @@ export default function SettingsScreen({
     <p style={{
       fontSize: 8,
       letterSpacing: 3,
-      color: 'rgba(255,255,255,0.3)',
+      color: 'var(--text-muted)',
       marginBottom: 8,
       marginTop: 20,
+      textTransform: 'uppercase',
     }}>
       {title}
     </p>
@@ -88,14 +90,13 @@ export default function SettingsScreen({
 
   const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div style={{
-      background: '#0d0020',
-      border: '1px solid #2a0a40',
-      borderRadius: 6,
+      background: 'linear-gradient(180deg, #1c1712 0%, #100d0a 100%)',
+      boxShadow: '0 0 0 2px #0a0705, 0 0 0 4px #5a4a38, 3px 3px 0 0 rgba(0, 0, 0, 0.7)',
       padding: '0.75rem 1rem',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 6,
+      marginBottom: 8,
     }}>
       <span style={{ fontSize: 12, color: '#fff' }}>{label}</span>
       {children}
@@ -108,205 +109,166 @@ export default function SettingsScreen({
       disabled={disabled}
       style={{
         width: 44,
-        height: 24,
-        borderRadius: 12,
+        height: 22,
         border: 'none',
-        background: disabled ? '#1a0a3a' : value ? '#9b59ff' : '#2a0a40',
+        background: disabled ? '#2a2620' : value ? 'var(--primary)' : '#3a332a',
+        boxShadow: '0 0 0 2px #0a0705',
         cursor: disabled ? 'not-allowed' : 'pointer',
         position: 'relative',
         opacity: disabled ? 0.4 : 1,
-        transition: 'background 0.2s',
+        transition: 'background 0.15s steps(2)',
       }}
     >
       <div style={{
         position: 'absolute',
         top: 3,
-        left: value && !disabled ? 22 : 3,
-        width: 18,
-        height: 18,
-        borderRadius: 9,
+        left: value && !disabled ? 24 : 3,
+        width: 16,
+        height: 16,
         background: '#fff',
-        transition: 'left 0.2s',
+        boxShadow: '0 0 0 1px #0a0705',
+        transition: 'left 0.15s steps(3)',
       }} />
     </button>
   );
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(180deg, #06060f 0%, #0d0020 100%)',
-      padding: '1.5rem',
-    }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-        <button
-          onClick={onBackToHome}
-          style={{
-            background: 'none',
-            border: '1px solid #2a0a40',
-            borderRadius: 4,
-            color: '#ffd700',
-            padding: '0.4rem 0.8rem',
-            fontSize: 12,
-            cursor: 'pointer',
-          }}
-        >
-          ←
-        </button>
-        <h1 style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: 4, margin: 0 }}>
-          PARAMÈTRES
-        </h1>
-      </div>
-
-      {/* COMPTE */}
-      <Section title="COMPTE" />
-      <div style={{
-        background: '#0d0020',
-        border: '1px solid #2a0a40',
-        borderRadius: 6,
-        padding: '0.75rem 1rem',
-        marginBottom: 6,
-      }}>
-        <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginBottom: 6, letterSpacing: 2 }}>
-          PSEUDO
-        </p>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            value={pseudo}
-            onChange={e => setPseudo(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSavePseudo()}
-            style={{
-              flex: 1,
-              background: '#06000f',
-              border: '1px solid #9b59ff',
-              borderRadius: 3,
-              padding: '0.4rem 0.6rem',
-              color: '#ffd700',
-              fontSize: 13,
-              outline: 'none',
-            }}
-          />
-          <button
-            onClick={handleSavePseudo}
-            disabled={isSavingPseudo || !pseudo.trim() || pseudo.trim() === currentPseudo}
-            style={{
-              padding: '0.4rem 0.8rem',
-              background: '#0d0020',
-              border: '1px solid #9b59ff',
-              borderRadius: 3,
-              color: '#9b59ff',
-              fontSize: 10,
-              cursor: 'pointer',
-              opacity: isSavingPseudo ? 0.5 : 1,
-            }}
-          >
-            {isSavingPseudo ? '...' : 'OK'}
-          </button>
+    <div className="home-screen">
+      <div className="container">
+        <div className="game-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+          <button className="btn btn-secondary btn-back" onClick={onBackToHome}>← Retour</button>
+          <h1 className="game-title" style={{ fontSize: '1.3rem', fontWeight: 700, flex: 1 }}>
+            Paramètres
+          </h1>
         </div>
-        {pseudoMessage && (
-          <p style={{ fontSize: 10, color: '#44ff88', marginTop: 6 }}>{pseudoMessage}</p>
-        )}
-      </div>
 
-      {/* AUDIO */}
-      <Section title="AUDIO" />
-      <Row label="Son (effets)">
-        <Toggle value={soundEnabled} onChange={handleSoundToggle} />
-      </Row>
-      <Row label="Musique (bande son)">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: 1 }}>bientôt</span>
-          <Toggle value={false} onChange={() => {}} disabled />
-        </div>
-      </Row>
-
-      {/* NOTIFICATIONS */}
-      <Section title="NOTIFICATIONS" />
-      <Row label="Notifications">
-        <Toggle value={notifEnabled} onChange={handleNotifToggle} />
-      </Row>
-      <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: -2, marginBottom: 0, paddingLeft: 4 }}>
-        Invitations de parties, tours de jeu
-      </p>
-
-      {/* INFORMATIONS */}
-      <Section title="INFORMATIONS" />
-      <Row label="Mentions légales">
-        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>›</span>
-      </Row>
-      <Row label="Version">
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>v1.0.0</span>
-      </Row>
-
-      {/* ZONE DANGEREUSE */}
-      <p style={{ fontSize: 8, letterSpacing: 3, color: '#880020', marginBottom: 8, marginTop: 20 }}>
-        ZONE DANGEREUSE
-      </p>
-      <div style={{
-        background: '#1a0008',
-        border: '1px solid #3a0010',
-        borderRadius: 6,
-        padding: '0.75rem 1rem',
-      }}>
-        {!showDeleteConfirm ? (
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            style={{
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: 'pointer',
-              textAlign: 'left',
-              width: '100%',
-            }}
-          >
-            <p style={{ fontSize: 12, color: '#ff4444', margin: 0, fontWeight: 600 }}>
-              Supprimer le compte
-            </p>
-            <p style={{ fontSize: 9, color: '#880020', margin: '4px 0 0' }}>
-              Action irréversible — toutes les données seront perdues
-            </p>
-          </button>
-        ) : (
-          <>
-            <p style={{ fontSize: 11, color: '#ff4444', marginBottom: 10, fontWeight: 600 }}>
-              Confirmer la suppression ?
+        <div className="card fade-in">
+          {/* COMPTE */}
+          <Section title="Compte" />
+          <div style={{
+            background: 'linear-gradient(180deg, #1c1712 0%, #100d0a 100%)',
+            boxShadow: '0 0 0 2px #0a0705, 0 0 0 4px #5a4a38, 3px 3px 0 0 rgba(0, 0, 0, 0.7)',
+            padding: '0.75rem 1rem',
+            marginBottom: 8,
+          }}>
+            <p style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 6, letterSpacing: 2 }}>
+              PSEUDO
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="input"
+                value={pseudo}
+                onChange={e => setPseudo(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSavePseudo()}
+                style={{ flex: 1, fontSize: 13, padding: '0.4rem 0.6rem' }}
+              />
               <button
-                onClick={() => setShowDeleteConfirm(false)}
-                style={{
-                  flex: 1,
-                  padding: '0.5rem',
-                  background: '#0d0020',
-                  border: '1px solid #2a0a40',
-                  borderRadius: 3,
-                  color: '#fff',
-                  fontSize: 11,
-                  cursor: 'pointer',
-                }}
+                className="btn btn-secondary"
+                onClick={handleSavePseudo}
+                disabled={isSavingPseudo || !pseudo.trim() || pseudo.trim() === currentPseudo}
+                style={{ fontSize: 10, padding: '0.4rem 0.8rem', minHeight: 'auto' }}
               >
-                Annuler
-              </button>
-              <button
-                onClick={handleDeleteAccount}
-                style={{
-                  flex: 1,
-                  padding: '0.5rem',
-                  background: '#3a0010',
-                  border: '1px solid #ff4444',
-                  borderRadius: 3,
-                  color: '#ff4444',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                Supprimer
+                {isSavingPseudo ? '...' : 'OK'}
               </button>
             </div>
-          </>
-        )}
+            {pseudoMessage && (
+              <p style={{ fontSize: 10, color: 'var(--success)', marginTop: 8 }}>{pseudoMessage}</p>
+            )}
+          </div>
+
+          {/* AUDIO */}
+          <Section title="Audio" />
+          <Row label="Son (effets)">
+            <Toggle value={soundEnabled} onChange={handleSoundToggle} />
+          </Row>
+          <Row label="Musique (bande son)">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1 }}>bientôt</span>
+              <Toggle value={false} onChange={() => {}} disabled />
+            </div>
+          </Row>
+
+          {/* NOTIFICATIONS */}
+          <Section title="Notifications" />
+          <Row label="Notifications">
+            <Toggle value={notifEnabled} onChange={handleNotifToggle} />
+          </Row>
+          <p style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: -2, marginBottom: 0, paddingLeft: 4 }}>
+            Invitations de parties, tours de jeu
+          </p>
+
+          {/* INFORMATIONS */}
+          <Section title="Informations" />
+          <Row label="Mentions légales">
+            <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>›</span>
+          </Row>
+          <Row label="Version">
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>v1.0.0</span>
+          </Row>
+
+          {/* ZONE DANGEREUSE */}
+          <p style={{ fontSize: 8, letterSpacing: 3, color: 'var(--secondary)', marginBottom: 8, marginTop: 20, textTransform: 'uppercase' }}>
+            Zone dangereuse
+          </p>
+          <div style={{
+            background: 'linear-gradient(180deg, #2a0f0f 0%, #1a0808 100%)',
+            boxShadow: '0 0 0 2px #0a0705, 0 0 0 4px var(--secondary), 3px 3px 0 0 rgba(0, 0, 0, 0.7)',
+            padding: '0.75rem 1rem',
+          }}>
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                }}
+              >
+                <p style={{ fontSize: 12, color: 'var(--secondary)', margin: 0, fontWeight: 600 }}>
+                  Supprimer le compte
+                </p>
+                <p style={{ fontSize: 9, color: '#c47070', margin: '4px 0 0' }}>
+                  Action irréversible — toutes les données seront perdues
+                </p>
+              </button>
+            ) : (
+              <>
+                <p style={{ fontSize: 11, color: 'var(--secondary)', marginBottom: 10, fontWeight: 600 }}>
+                  Confirmer la suppression ?
+                </p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    style={{ flex: 1, fontSize: 11, minHeight: 'auto', padding: '0.5rem' }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleDeleteAccount}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      background: 'linear-gradient(180deg, #4a1919 0% 55%, #2a0d0d 55% 100%)',
+                      boxShadow: '0 0 0 2px #0a0705, 0 0 0 4px var(--secondary), 3px 3px 0 0 rgba(0, 0, 0, 0.75)',
+                      border: 'none',
+                      color: '#ffb8b8',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textShadow: '2px 2px 0 rgba(0,0,0,0.7)',
+                    }}
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

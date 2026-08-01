@@ -27,9 +27,9 @@ export interface Player {
    * UUID persistant du joueur humain (même valeur que soloPlayerId côté
    * frontend, localStorage), utilisé pour rattacher les stats/leaderboard
    * Multijoueur à un profil durable. Absent = joueur anonyme (client non à
-   * jour) : les stats par pseudo (player_stats) restent alimentées, mais le
-   * classement (table leaderboard, liée à players.id) ne sera pas rattaché
-   * à un profil existant.
+   * jour) : ni les stats (player_stats, clé par player_id) ni le classement
+   * (table leaderboard, liée à players.id) ne seront rattachés à un profil
+   * existant — écritures silencieusement ignorées (catch non critique).
    */
   persistentId?: string;
 }

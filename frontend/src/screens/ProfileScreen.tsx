@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
+import '../styles/HomeScreen.css';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL } from '../services/backendUrl';
 
 interface ProfileData {
   player: {
@@ -88,178 +89,145 @@ export default function ProfileScreen({
   const wins = (stats?.bot_wins ?? 0) + (stats?.multiplayer_wins ?? 0);
   const losses = (stats?.bot_losses ?? 0) + (stats?.multiplayer_losses ?? 0);
 
+  const tile = (color: string): CSSProperties => ({
+    background: 'linear-gradient(180deg, #1c1712 0%, #100d0a 100%)',
+    boxShadow: `0 0 0 2px #0a0705, 0 0 0 4px ${color}, 4px 4px 0 0 rgba(0, 0, 0, 0.7)`,
+    padding: '0.75rem',
+    textAlign: 'center' as const,
+  });
+
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(180deg, #06060f 0%, #0d0020 100%)',
-      padding: '1.5rem',
-    }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-        <button
-          onClick={onBackToHome}
-          style={{
-            background: 'none',
-            border: '1px solid #2a0a40',
-            borderRadius: 4,
-            color: '#ffd700',
-            padding: '0.4rem 0.8rem',
-            fontSize: 12,
-            cursor: 'pointer',
-          }}
-        >
-          ←
-        </button>
-        <h1 style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: 4, margin: 0 }}>
-          {readOnly ? 'PROFIL ADVERSAIRE' : 'PROFIL'}
-        </h1>
-      </div>
-
-      {isLoading ? (
-        <div style={{ textAlign: 'center', paddingTop: '3rem' }}>
-          <p style={{ color: '#9b59ff', fontSize: 11, letterSpacing: 2 }}>CHARGEMENT...</p>
+    <div className="home-screen">
+      <div className="container">
+        <div className="game-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+          <button className="btn btn-secondary btn-back" onClick={onBackToHome}>← Retour</button>
+          <h1 className="game-title" style={{ fontSize: '1.3rem', fontWeight: 700, flex: 1 }}>
+            {readOnly ? 'Profil adversaire' : 'Profil'}
+          </h1>
         </div>
-      ) : (
-        <>
-          {/* Zone identité */}
-          <div style={{
-            background: '#06060f',
-            border: '1px solid #1a0a3a',
-            borderRadius: 8,
-            padding: '1.5rem',
-            textAlign: 'center',
-            marginBottom: '1rem',
-          }}>
-            {/* Avatar placeholder */}
-            <div style={{
-              width: 72,
-              height: 72,
-              background: '#1a0040',
-              borderRadius: 6,
-              border: '2px solid #9b59ff',
-              margin: '0 auto 0.75rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 32,
-            }}>
-              👤
-            </div>
 
-            {/* Pseudo */}
-            <p style={{ fontSize: 18, fontWeight: 700, color: '#ffd700', letterSpacing: 2, margin: 0 }}>
-              {player?.pseudo || playerName}
-            </p>
+        {isLoading ? (
+          <div style={{ textAlign: 'center', paddingTop: '3rem' }}>
+            <p style={{ color: 'var(--primary)', fontSize: 11, letterSpacing: 2 }}>CHARGEMENT...</p>
+          </div>
+        ) : (
+          <>
+            {/* Zone identité */}
+            <div className="card fade-in" style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              {/* Avatar placeholder */}
+              <div style={{
+                width: 72,
+                height: 72,
+                background: 'linear-gradient(180deg, #2b2620 0% 55%, #15120e 55% 100%)',
+                boxShadow: '0 0 0 2px #0a0705, 0 0 0 4px var(--primary), 3px 3px 0 0 rgba(0, 0, 0, 0.7)',
+                margin: '0 auto 0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 32,
+              }}>
+                👤
+              </div>
 
-            {/* Badge titre + prestige */}
-            <div style={{
-              display: 'inline-block',
-              marginTop: 6,
-              background: '#1a0040',
-              border: '1px solid #9b59ff',
-              borderRadius: 3,
-              padding: '2px 8px',
-              fontSize: 9,
-              letterSpacing: 2,
-              color: '#9b59ff',
-            }}>
-              {prestige.toUpperCase()}
-            </div>
+              {/* Pseudo */}
+              <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)', letterSpacing: 2, margin: 0, textShadow: '2px 2px 0 rgba(0,0,0,0.7)' }}>
+                {player?.pseudo || playerName}
+              </p>
 
-            <p style={{ fontSize: 11, color: '#9b59ff', margin: '6px 0 0' }}>
-              NIVEAU {level}
-            </p>
+              {/* Badge titre + prestige */}
+              <div style={{
+                display: 'inline-block',
+                marginTop: 8,
+                background: 'linear-gradient(180deg, #4a3319 0% 55%, #2a1c0d 55% 100%)',
+                boxShadow: '0 0 0 2px #0a0705, 0 0 0 3px var(--primary)',
+                padding: '3px 10px',
+                fontSize: 9,
+                letterSpacing: 2,
+                color: '#ffe9b8',
+                fontWeight: 700,
+              }}>
+                {prestige.toUpperCase()}
+              </div>
 
-            {/* Barre XP (cachée en mode readOnly) */}
-            {!readOnly && (
-              <div style={{ marginTop: 10, textAlign: 'left' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 8, color: '#9b59ff' }}>XP</span>
-                  <span style={{ fontSize: 8, color: 'rgba(155,89,255,0.6)' }}>
-                    {xpInLevel} / {xpNeeded}
-                  </span>
-                </div>
-                <div style={{ background: '#0a0020', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+              <p style={{ fontSize: 11, color: 'var(--primary)', margin: '8px 0 0' }}>
+                NIVEAU {level}
+              </p>
+
+              {/* Barre XP (cachée en mode readOnly) */}
+              {!readOnly && (
+                <div style={{ marginTop: 12, textAlign: 'left' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 8, color: 'var(--primary)' }}>XP</span>
+                    <span style={{ fontSize: 8, color: 'rgba(155,89,255,0.6)' }}>
+                      {xpInLevel} / {xpNeeded}
+                    </span>
+                  </div>
                   <div style={{
-                    width: `${xpPct}%`,
-                    height: '100%',
-                    background: '#9b59ff',
-                    borderRadius: 4,
-                    transition: 'width 0.6s ease',
-                  }} />
+                    background: '#0a0705',
+                    boxShadow: '0 0 0 2px #0a0705, 0 0 0 3px #5a4a38',
+                    height: 10,
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      width: `${xpPct}%`,
+                      height: '100%',
+                      background: 'linear-gradient(90deg, var(--primary-dark), var(--primary))',
+                      transition: 'width 0.6s steps(10)',
+                    }} />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Bouton personnaliser (non readOnly) */}
-            {!readOnly && onEditSettings && (
-              <button
-                onClick={onEditSettings}
-                style={{
-                  marginTop: 12,
-                  padding: '0.4rem 1rem',
-                  background: '#0d0020',
-                  border: '1px solid #9b59ff',
-                  borderRadius: 3,
-                  color: '#9b59ff',
-                  fontSize: 10,
-                  letterSpacing: 2,
-                  cursor: 'pointer',
-                }}
-              >
-                PARAMÈTRES
-              </button>
-            )}
-          </div>
+              {/* Bouton personnaliser (non readOnly) */}
+              {!readOnly && onEditSettings && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={onEditSettings}
+                  style={{ marginTop: 14, fontSize: 10 }}
+                >
+                  PARAMÈTRES
+                </button>
+              )}
+            </div>
 
-          {/* Stats — 4 cartes */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 6,
-            marginBottom: '1rem',
-          }}>
-            {[
-              { label: 'PARTIES', value: totalGames, color: '#fff' },
-              { label: 'MEILLEUR SCORE', value: bestScore.toLocaleString(), color: '#ffd700' },
-              { label: 'VICTOIRES', value: wins, color: '#44ff88' },
-              { label: 'DÉFAITES', value: losses, color: '#ff4444' },
-            ].map(({ label, value, color }) => (
-              <div
-                key={label}
-                style={{
-                  background: '#0d0020',
-                  border: '1px solid #2a0a40',
-                  borderRadius: 6,
-                  padding: '0.75rem',
-                  textAlign: 'center',
-                }}
-              >
-                <p style={{ fontSize: 8, letterSpacing: 2, color: 'rgba(255,255,255,0.35)', marginBottom: 4 }}>
-                  {label}
-                </p>
-                <p style={{ fontSize: 20, fontWeight: 700, color, margin: 0 }}>{value}</p>
-              </div>
-            ))}
-          </div>
+            {/* Stats — 4 cartes */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '0.6rem',
+              marginBottom: '1rem',
+            }}>
+              {[
+                { label: 'PARTIES', value: totalGames, color: '#b0c4de' },
+                { label: 'MEILLEUR SCORE', value: bestScore.toLocaleString(), color: '#ffd700' },
+                { label: 'VICTOIRES', value: wins, color: '#44ff88' },
+                { label: 'DÉFAITES', value: losses, color: '#ff4444' },
+              ].map(({ label, value, color }) => (
+                <div key={label} style={tile(color)}>
+                  <p style={{ fontSize: 8, letterSpacing: 2, color: 'var(--text-muted)', marginBottom: 4 }}>
+                    {label}
+                  </p>
+                  <p style={{ fontSize: 20, fontWeight: 700, color, margin: 0 }}>{value}</p>
+                </div>
+              ))}
+            </div>
 
-          {/* Total score */}
-          <div style={{
-            background: '#0d0020',
-            border: '1px solid #2a0a40',
-            borderRadius: 6,
-            padding: '0.75rem 1rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}>
-            <span style={{ fontSize: 9, letterSpacing: 2, color: 'rgba(255,255,255,0.35)' }}>SCORE TOTAL</span>
-            <span style={{ fontSize: 16, fontWeight: 700, color: '#9b59ff' }}>
-              {(player?.total_score ?? 0).toLocaleString()}
-            </span>
-          </div>
-        </>
-      )}
+            {/* Total score */}
+            <div style={{
+              ...tile('var(--accent)'),
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              textAlign: 'left',
+            }}>
+              <span style={{ fontSize: 9, letterSpacing: 2, color: 'var(--text-muted)' }}>SCORE TOTAL</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>
+                {(player?.total_score ?? 0).toLocaleString()}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

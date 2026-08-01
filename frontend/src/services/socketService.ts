@@ -1,25 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { Game, Player, GameSettings, JokerType } from '../shared/types';
-
-// Détecter automatiquement l'URL du serveur
-// En production (Railway), le frontend est servi par le même serveur, donc utiliser l'URL relative
-// En développement, utiliser localhost ou la variable d'environnement
-const getServerUrl = (): string => {
-  // Si une variable d'environnement est définie, l'utiliser
-  if (import.meta.env.VITE_BACKEND_URL) {
-    return import.meta.env.VITE_BACKEND_URL as string;
-  }
-  
-  // En production, utiliser l'URL relative (même serveur)
-  if (import.meta.env.PROD || window.location.hostname !== 'localhost') {
-    return window.location.origin;
-  }
-  
-  // En développement, utiliser localhost
-  return 'http://localhost:3001';
-};
-
-const SERVER_URL = getServerUrl();
+import { BACKEND_URL as SERVER_URL } from './backendUrl';
 
 export interface SocketEvents {
   // Événements émis par le client
@@ -69,6 +50,8 @@ export interface SocketEvents {
 export class SocketService {
   private socket: Socket | null = null;
   private listeners: Map<string, Set<Function>> = new Map();
+  private reconnectHandlers: Set<() => void> = new Set();
+  private hasConnectedOnce = false;
 
   /**
    * Se connecter au serveur
@@ -104,6 +87,19 @@ export class SocketService {
       // Ces listeners ne doivent être ajoutés qu'une seule fois
       this.socket.on('connect', () => {
         console.log('Connecté au serveur WebSocket');
+
+        // 'connect' se déclenche aussi après une reconnexion réseau (nouveau
+        // socket id côté serveur). Sans ça, un joueur seul en lobby dont le
+        // socket coupe puis revient (Wi-Fi, veille...) n'envoie plus jamais
+        // son identité au serveur : GameManager.playerSockets garde l'ancien
+        // socket id mort, et si personne ne revient dans les 15s
+        // (LOBBY_DISCONNECT_GRACE_MS), la partie et son code sont supprimés.
+        // On ne déclenche PAS ça sur la toute première connexion (déjà géré
+        // par la logique de reconnexion au montage dans App.tsx).
+        if (this.hasConnectedOnce) {
+          this.reconnectHandlers.forEach((handler) => handler());
+        }
+        this.hasConnectedOnce = true;
       });
 
       this.socket.on('disconnect', () => {
@@ -198,6 +194,19 @@ export class SocketService {
     }
 
     this.socket.emit(event, ...args);
+  }
+
+  /**
+   * S'abonner aux reconnexions réseau du socket (pas la connexion initiale).
+   * Utilisé pour renvoyer l'identité du joueur au serveur après une coupure,
+   * sans quoi le joueur reste associé à un socket id mort côté serveur.
+   */
+  onSocketReconnect(handler: () => void): void {
+    this.reconnectHandlers.add(handler);
+  }
+
+  offSocketReconnect(handler: () => void): void {
+    this.reconnectHandlers.delete(handler);
   }
 
   /**

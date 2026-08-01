@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { GameManager } from './GameManager';
 import { setupSocketHandlers } from './socketHandlers';
 import { soloManager } from './SoloManager';
@@ -28,9 +29,10 @@ const io = new Server(httpServer, {
       const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
       const isRender = origin?.endsWith('.onrender.com');
       const isVercel = origin?.endsWith('.vercel.app');
+      const isRailway = origin?.endsWith('.up.railway.app');
       const isAllowedOrigin = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
 
-      if (isLocalhost || isRender || isVercel || isAllowedOrigin) {
+      if (isLocalhost || isRender || isVercel || isRailway || isAllowedOrigin) {
         callback(null, true);
       } else {
         console.warn(`CORS: Origine rejetée: ${origin}`);
@@ -299,7 +301,7 @@ app.get('/api/players/:playerId/profile', async (req: express.Request, res: expr
 
     const [playerRes, statsRes, unlockedRes] = await Promise.all([
       supabase.from('players').select('*').eq('id', req.params.playerId).single(),
-      supabase.from('player_stats').select('*').eq('player_name', req.params.playerId).single(),
+      supabase.from('player_stats').select('*').eq('player_id', req.params.playerId).single(),
       supabase
         .from('cosmetics_unlocked')
         .select('cosmetic_id, cosmetics_catalog(*)')
@@ -312,6 +314,21 @@ app.get('/api/players/:playerId/profile', async (req: express.Request, res: expr
       stats: statsRes.data || null,
       unlocked: (unlockedRes.data || []).map((r: any) => r.cosmetics_catalog),
     });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Codex — artistes découverts par un joueur (galaxie/pokédex)
+app.get('/api/players/:playerId/discoveries', async (req: express.Request, res: express.Response) => {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
+    const { data, error } = await supabase
+      .from('artist_discoveries')
+      .select('artist_id')
+      .eq('player_id', req.params.playerId);
+    if (error) throw error;
+    res.json({ discoveredIds: (data || []).map((r) => r.artist_id) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -356,6 +373,72 @@ app.get('/api/leaderboard', async (req: express.Request, res: express.Response) 
     const { data, error } = await query;
     if (error) throw error;
     res.json({ entries: data || [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Carte des connexions ("galaxie") — payload compact pour la visualisation
+// Canvas côté frontend. Coûteux à calculer (pagination sur ~7000 artistes +
+// tri des collaborations), donc mis en cache en mémoire : les données ne
+// bougent qu'après une resynchro Last.fm/un nettoyage manuel, pas besoin de
+// recalculer à chaque requête.
+let galaxyCache: { data: unknown; computedAt: number } | null = null;
+const GALAXY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
+
+app.get('/api/artists/galaxy', async (req: express.Request, res: express.Response) => {
+  try {
+    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
+
+    if (galaxyCache && Date.now() - galaxyCache.computedAt < GALAXY_CACHE_TTL_MS) {
+      return res.json(galaxyCache.data);
+    }
+
+    const PAGE_SIZE = 1000;
+    const artists: { id: string; name: string; lastfm_listeners: number | null; category: string; collab_degree: number }[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('artists')
+        .select('id, name, lastfm_listeners, category, collab_degree')
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      artists.push(...data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    const idToIndex = new Map<string, number>();
+    artists.forEach((a, i) => idToIndex.set(a.id, i));
+
+    // Top ~4000 collaborations par nombre de titres partagés — assez pour
+    // représenter les grosses connexions sans traîner les 65k liens (illisible
+    // et inutilement lourd à transférer/dessiner).
+    const edges: [number, number, number][] = [];
+    for (let offset = 0; offset < 4000; offset += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from('collaborations')
+        .select('artist1_id, artist2_id, song_count')
+        .order('song_count', { ascending: false })
+        .range(offset, offset + PAGE_SIZE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      for (const c of data) {
+        const i = idToIndex.get(c.artist1_id);
+        const j = idToIndex.get(c.artist2_id);
+        if (i === undefined || j === undefined) continue;
+        edges.push([i, j, Number(c.song_count) || 1]);
+      }
+      if (data.length < PAGE_SIZE) break;
+    }
+
+    const payload = {
+      artists: artists.map((a) => [a.id, a.name, a.lastfm_listeners, a.category || 'confidentiel', a.collab_degree]),
+      edges,
+    };
+    galaxyCache = { data: payload, computedAt: Date.now() };
+    res.json(payload);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -414,86 +497,26 @@ app.post('/api/leaderboard', async (req: express.Request, res: express.Response)
 });
 
 // ============================================================
-// API Stats (par player_name pour compatibilité existante)
-// ============================================================
-
-app.get('/api/stats/:playerName', async (req: express.Request, res: express.Response) => {
-  try {
-    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
-
-    const { data, error } = await supabase
-      .from('player_stats')
-      .select('*')
-      .eq('player_name', req.params.playerName)
-      .single();
-    if (error && error.code !== 'PGRST116') throw error;
-    res.json({ stats: data || null });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/stats/:playerName', async (req: express.Request, res: express.Response) => {
-  const playerName = req.params.playerName;
-  const update = req.body as {
-    mode: string;
-    score: number;
-    turns: number;
-    botWin?: boolean;
-    multiWin?: boolean;
-  };
-
-  try {
-    if (!supabase) return res.status(503).json({ error: 'Supabase non configuré' });
-
-    const { data: existing } = await supabase
-      .from('player_stats').select('*').eq('player_name', playerName).single();
-
-    const stats: Record<string, any> = existing || {
-      player_name: playerName,
-      total_games: 0, total_solo_games: 0, total_bot_games: 0, total_multiplayer_games: 0,
-      best_solo_score: 0, best_solo_turns: 0, best_bot_score: 0,
-      total_score: 0, bot_wins: 0, bot_losses: 0,
-      xp: 0, multiplayer_wins: 0, multiplayer_losses: 0, best_multiplayer_score: 0,
-    };
-
-    stats.total_games = (stats.total_games || 0) + 1;
-    stats.total_score = (stats.total_score || 0) + (Number(update.score) || 0);
-
-    if (update.mode === 'solo') {
-      stats.total_solo_games = (stats.total_solo_games || 0) + 1;
-      if (Number(update.score) > (stats.best_solo_score || 0)) stats.best_solo_score = Number(update.score);
-      if (Number(update.turns) > (stats.best_solo_turns || 0)) stats.best_solo_turns = Number(update.turns);
-    } else if (update.mode === 'bot') {
-      stats.total_bot_games = (stats.total_bot_games || 0) + 1;
-      if (Number(update.score) > (stats.best_bot_score || 0)) stats.best_bot_score = Number(update.score);
-      if (update.botWin) stats.bot_wins = (stats.bot_wins || 0) + 1;
-      else stats.bot_losses = (stats.bot_losses || 0) + 1;
-    } else if (update.mode === 'multiplayer') {
-      stats.total_multiplayer_games = (stats.total_multiplayer_games || 0) + 1;
-      if (Number(update.score) > (stats.best_multiplayer_score || 0)) stats.best_multiplayer_score = Number(update.score);
-      if (update.multiWin) stats.multiplayer_wins = (stats.multiplayer_wins || 0) + 1;
-      else stats.multiplayer_losses = (stats.multiplayer_losses || 0) + 1;
-    }
-
-    stats.updated_at = new Date().toISOString();
-
-    const { data, error } = await supabase
-      .from('player_stats')
-      .upsert({ ...stats, player_name: playerName }, { onConflict: 'player_name' })
-      .select().single();
-    if (error) throw error;
-    res.json({ stats: data });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ============================================================
 // Fin de partie (XP + leaderboard + unlocks) — handleGameFinish vit dans
 // ../services/GameFinishService.ts (partagé avec GameManager pour le
 // Multijoueur, qui l'appelle directement côté serveur sans round-trip HTTP).
 // ============================================================
+
+// Rassemble les genius_id de tous les artistes apparus dans une run (seed +
+// coups valides) pour alimenter le codex/carte galaxie — voir handleGameFinish.
+function collectEncounteredGeniusIds(
+  seedArtist: { gameId?: number },
+  ...movesLists: Array<Array<{ isValid: boolean; artist: { gameId?: number } }>>
+): number[] {
+  const ids = new Set<number>();
+  if (seedArtist.gameId) ids.add(seedArtist.gameId);
+  for (const moves of movesLists) {
+    for (const m of moves) {
+      if (m.isValid && m.artist.gameId) ids.add(m.artist.gameId);
+    }
+  }
+  return Array.from(ids);
+}
 
 // Fin de partie — Solo Infini
 app.post('/api/solo/infinite/finish', async (req: express.Request, res: express.Response) => {
@@ -514,6 +537,7 @@ app.post('/api/solo/infinite/finish', async (req: express.Request, res: express.
       mode: 'Solo Infini',
       overflowCount: run.overflowCount,
       overflowXpBonus: run.overflowXpBonus,
+      encounteredGeniusIds: collectEncounteredGeniusIds(run.seedArtist, run.moves),
     });
 
     res.json(result);
@@ -543,6 +567,7 @@ app.post('/api/solo/bot/finish', async (req: express.Request, res: express.Respo
       botWin: !playerWon,
       overflowCount: run.overflowCount,
       overflowXpBonus: run.overflowXpBonus,
+      encounteredGeniusIds: collectEncounteredGeniusIds(run.seedArtist, run.playerMoves, run.botMoves),
     });
 
     res.json(result);
@@ -554,10 +579,11 @@ app.post('/api/solo/bot/finish', async (req: express.Request, res: express.Respo
 // Configuration des handlers WebSocket
 setupSocketHandlers(io, gameManager);
 
-// Servir le frontend en production (Render)
-if (process.env.NODE_ENV === 'production') {
-  // Chemin relatif depuis le fichier compilé (dist/server/index.js)
-  const frontendDistPath = path.join(process.cwd(), 'frontend/dist');
+// Servir le frontend (Railway : un seul service pour l'API + le statique).
+// Condition sur la présence réelle du build plutôt que sur NODE_ENV, pour ne
+// pas dépendre d'une variable d'env à ne pas oublier de configurer côté host.
+const frontendDistPath = path.join(process.cwd(), 'frontend/dist');
+if (fs.existsSync(path.join(frontendDistPath, 'index.html'))) {
   app.use(express.static(frontendDistPath));
   
   // Toutes les routes non-API servent le frontend (SPA)

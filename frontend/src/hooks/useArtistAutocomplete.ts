@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL } from '../services/backendUrl';
 
 export function useArtistAutocomplete(query: string, enabled = true) {
   const [suggestions, setSuggestions] = useState<string[]>([]);

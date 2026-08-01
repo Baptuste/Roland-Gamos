@@ -5,7 +5,7 @@ import { GameService } from '../shared/services/GameService';
 import { useArtistAutocomplete } from '../hooks/useArtistAutocomplete';
 import '../styles/GameScreen.css';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL } from '../services/backendUrl';
 const TEAM_LABELS = ['Équipe A', 'Équipe B', 'Équipe C', 'Équipe D'];
 const TEAM_COLORS = ['var(--primary)', 'var(--secondary)', 'var(--accent)', 'var(--error)'];
 const JOKER_TYPES: JokerType[] = ['timer', 'skip', 'combo', 'bouclier', 'archives', 'resurrection'];

@@ -5,7 +5,7 @@ import '../styles/HomeScreen.css';
 import '../styles/Backgrounds.css';
 import { useFrameCycle } from '../hooks/useFrameCycle';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL } from '../services/backendUrl';
 const ACCUEIL_FRAMES = Array.from({ length: 7 }, (_, i) => `/assets/backgrounds-animated/accueil/frame-${i}.png`);
 // NOTE provisoire : fond animé PixelLab pas encore généré pour le lobby (quota
 // de génération du compte épuisé, cf. SoloInfiniteScreen.tsx). Le lobby garde
@@ -37,8 +37,9 @@ interface MultiplayerHomeScreenProps {
   onStartSolo?: (playerName: string) => void;
   onStartBot?: (playerName: string) => void;
   onShowLeaderboard?: () => void;
-  onShowStats?: () => void;
+  onShowCasier?: (playerName: string) => void;
   onShowProfile?: (playerName: string) => void;
+  onShowGalaxy?: () => void;
   onBackToHome?: () => void;
   initialGame?: Game | null;
   initialPlayer?: Player | null;
@@ -56,8 +57,9 @@ export default function MultiplayerHomeScreen({
   onStartSolo,
   onStartBot,
   onShowLeaderboard,
-  onShowStats,
+  onShowCasier,
   onShowProfile,
+  onShowGalaxy,
   onBackToHome,
   initialGame = null,
   initialPlayer = null,
@@ -929,32 +931,47 @@ export default function MultiplayerHomeScreen({
               </div>
             )}
 
-            {(onShowLeaderboard || onShowStats || onShowProfile) && (
-              <div className="mt-4" style={{ display: 'flex', gap: '0.5rem' }}>
+            {(onShowLeaderboard || onShowCasier || onShowProfile || onShowGalaxy) && (
+              <div className="mt-4" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {onShowLeaderboard && (
                   <button
                     className="btn btn-secondary"
-                    style={{ flex: 1 }}
+                    style={{ flex: '1 1 auto' }}
                     onClick={onShowLeaderboard}
                     type="button"
                   >
                     Classement
                   </button>
                 )}
-                {onShowStats && (
+                {onShowGalaxy && (
                   <button
                     className="btn btn-secondary"
-                    style={{ flex: 1 }}
-                    onClick={onShowStats}
+                    style={{ flex: '1 1 auto' }}
+                    onClick={onShowGalaxy}
                     type="button"
                   >
-                    Statistiques
+                    Galaxie
+                  </button>
+                )}
+                {onShowCasier && (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ flex: '1 1 auto' }}
+                    onClick={() => {
+                      const trimmedName = playerName.trim();
+                      if (trimmedName) onShowCasier(trimmedName);
+                    }}
+                    disabled={!playerName.trim()}
+                    title={!playerName.trim() ? 'Entrez votre nom pour accéder à votre casier' : undefined}
+                    type="button"
+                  >
+                    Casier
                   </button>
                 )}
                 {onShowProfile && (
                   <button
                     className="btn btn-secondary"
-                    style={{ flex: 1 }}
+                    style={{ flex: '1 1 auto' }}
                     onClick={() => {
                       const trimmedName = playerName.trim();
                       if (trimmedName) onShowProfile(trimmedName);

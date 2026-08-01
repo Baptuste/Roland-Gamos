@@ -1,6 +1,7 @@
 import {
   categorizeByQuantile,
   fetchLastfmArtistInfo,
+  normalizeArtistNameForLastfm,
   CATEGORY_TIERS,
   CATEGORY_BONUS,
   ArtistListenerEntry,
@@ -78,6 +79,21 @@ describe('categorizeByQuantile', () => {
   });
 });
 
+describe('normalizeArtistNameForLastfm', () => {
+  it("remplace l'apostrophe typographique par l'apostrophe droite (bug Rim'K du 2026-08-01)", () => {
+    expect(normalizeArtistNameForLastfm('Rim’K')).toBe("Rim'K");
+  });
+
+  it('remplace les guillemets typographiques simples et doubles', () => {
+    expect(normalizeArtistNameForLastfm('‘Test’')).toBe("'Test'");
+    expect(normalizeArtistNameForLastfm('“Test”')).toBe('"Test"');
+  });
+
+  it('laisse les noms sans caractère typographique inchangés', () => {
+    expect(normalizeArtistNameForLastfm('Booba')).toBe('Booba');
+  });
+});
+
 describe('fetchLastfmArtistInfo', () => {
   const originalFetch = global.fetch;
 
@@ -129,5 +145,17 @@ describe('fetchLastfmArtistInfo', () => {
     const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
     expect(calledUrl).toContain('mbid=the-mbid');
     expect(calledUrl).not.toContain('artist=Some');
+  });
+
+  it("normalise l'apostrophe typographique du nom avant de construire l'URL Last.fm", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ artist: { stats: { listeners: '1', playcount: '1' } } }),
+    }) as any;
+
+    await fetchLastfmArtistInfo('fake-key', { name: 'Rim’K' });
+    const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    const parsed = new URL(calledUrl);
+    expect(parsed.searchParams.get('artist')).toBe("Rim'K");
   });
 });

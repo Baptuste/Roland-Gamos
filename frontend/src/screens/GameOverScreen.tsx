@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import { useFrameCycle } from '../hooks/useFrameCycle';
+import '../styles/HomeScreen.css';
 
 const FIN_DE_PARTIE_FRAMES = Array.from(
   { length: 6 },
   (_, i) => `/assets/backgrounds-animated/fin-de-partie/frame-${i}.png`
 );
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL } from '../services/backendUrl';
 
 // ─────────────────────────────────────────────
 // Types
@@ -64,18 +65,31 @@ const END_REASON_LABEL: Record<string, string> = {
 function XPBar({ current, max }: { current: number; max: number }) {
   const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0;
   return (
-    <div style={{ background: '#0a0020', borderRadius: 4, height: 8, overflow: 'hidden', width: '100%' }}>
+    <div style={{
+      background: '#0a0705',
+      boxShadow: '0 0 0 2px #0a0705, 0 0 0 3px #5a4a38',
+      height: 10,
+      overflow: 'hidden',
+      width: '100%',
+    }}>
       <div
         style={{
           width: `${pct}%`,
           height: '100%',
-          background: '#9b59ff',
-          transition: 'width 0.8s ease',
-          borderRadius: 4,
+          background: 'linear-gradient(90deg, var(--primary-dark), var(--primary))',
+          transition: 'width 0.8s steps(10)',
         }}
       />
     </div>
   );
+}
+
+/** Panneau pixel-brut réutilisable : plaque sombre + anneau dur, sans flou. */
+function pixelPanel(color = '#5a4a38'): CSSProperties {
+  return {
+    background: 'linear-gradient(180deg, #1c1712 0%, #100d0a 100%)',
+    boxShadow: `0 0 0 2px #0a0705, 0 0 0 4px ${color}, 4px 4px 0 0 rgba(0, 0, 0, 0.7)`,
+  };
 }
 
 function xpForLevel(level: number): number {
@@ -160,59 +174,42 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
       }}>
         {/* Header */}
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: 9, letterSpacing: 4, color: '#9b59ff', marginBottom: 4 }}>FIN DE PARTIE</p>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#ffd700', letterSpacing: 2, margin: 0 }}>
+          <p style={{ fontSize: 9, letterSpacing: 4, color: 'var(--primary)', marginBottom: 4 }}>FIN DE PARTIE</p>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)', letterSpacing: 2, margin: 0, textShadow: '2px 2px 0 rgba(0,0,0,0.7)' }}>
             RÉSULTATS
           </h1>
         </div>
 
         {/* Podium simplifié */}
-        <div style={{
-          background: '#06060f',
-          border: '1px solid #1a0a3a',
-          borderRadius: 8,
-          padding: '1.5rem',
-          width: '100%',
-          maxWidth: 400,
-          textAlign: 'center',
-        }}>
+        <div style={{ ...pixelPanel(), padding: '1.5rem', width: '100%', maxWidth: 400, textAlign: 'center' }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>
             {isVictory ? '🏆' : '💀'}
           </div>
-          <p style={{ fontSize: 13, color: '#9b59ff', letterSpacing: 2, marginBottom: 4 }}>
+          <p style={{ fontSize: 13, color: 'var(--primary)', letterSpacing: 2, marginBottom: 4 }}>
             {data.playerName}
           </p>
-          <p style={{ fontSize: 36, fontWeight: 700, color: '#ffd700', margin: '0.25rem 0' }}>
+          <p style={{ fontSize: 36, fontWeight: 700, color: 'var(--accent)', margin: '0.25rem 0', textShadow: '2px 2px 0 rgba(0,0,0,0.7)' }}>
             {data.score.toLocaleString()}
           </p>
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 4 }}>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
             pts
           </p>
         </div>
 
         {/* Stats rapides */}
-        <div style={{
-          background: '#06060f',
-          border: '1px solid #1a0a3a',
-          borderRadius: 8,
-          width: '100%',
-          maxWidth: 400,
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          overflow: 'hidden',
-        }}>
-          <div style={{ padding: '0.75rem', textAlign: 'center', borderRight: '1px solid #1a0a3a' }}>
-            <p style={{ fontSize: 8, letterSpacing: 2, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>MODE</p>
+        <div style={{ ...pixelPanel(), width: '100%', maxWidth: 400, display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+          <div style={{ padding: '0.75rem', textAlign: 'center', borderRight: '2px solid #0a0705' }}>
+            <p style={{ fontSize: 8, letterSpacing: 2, color: 'var(--text-muted)', marginBottom: 4 }}>MODE</p>
             <p style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>{data.mode}</p>
           </div>
           <div style={{ padding: '0.75rem', textAlign: 'center' }}>
-            <p style={{ fontSize: 8, letterSpacing: 2, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>MANCHES</p>
+            <p style={{ fontSize: 8, letterSpacing: 2, color: 'var(--text-muted)', marginBottom: 4 }}>MANCHES</p>
             <p style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>{data.turns}</p>
           </div>
           {data.endReason && (
-            <div style={{ padding: '0.75rem', textAlign: 'center', gridColumn: '1 / -1', borderTop: '1px solid #1a0a3a' }}>
-              <p style={{ fontSize: 8, letterSpacing: 2, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>FIN</p>
-              <p style={{ fontSize: 11, color: '#ff4444' }}>
+            <div style={{ padding: '0.75rem', textAlign: 'center', gridColumn: '1 / -1', borderTop: '2px solid #0a0705' }}>
+              <p style={{ fontSize: 8, letterSpacing: 2, color: 'var(--text-muted)', marginBottom: 4 }}>FIN</p>
+              <p style={{ fontSize: 11, color: 'var(--secondary)' }}>
                 {END_REASON_LABEL[data.endReason] || data.endReason}
               </p>
             </div>
@@ -221,20 +218,9 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
 
         {/* Bouton continuer */}
         <button
+          className="btn btn-primary"
           onClick={() => setStep(2)}
-          style={{
-            width: '100%',
-            maxWidth: 400,
-            padding: '0.875rem',
-            background: '#0d0020',
-            border: '2px solid #ffd700',
-            borderRadius: 4,
-            color: '#ffd700',
-            fontWeight: 700,
-            fontSize: 14,
-            letterSpacing: 4,
-            cursor: 'pointer',
-          }}
+          style={{ width: '100%', maxWidth: 400, fontSize: 14, letterSpacing: 4 }}
         >
           CONTINUER →
         </button>
@@ -274,29 +260,19 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
     }}>
       {/* Header */}
       <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-        <p style={{ fontSize: 9, letterSpacing: 4, color: '#9b59ff', marginBottom: 4 }}>FIN DE PARTIE</p>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#ffd700', letterSpacing: 2, margin: 0 }}>
+        <p style={{ fontSize: 9, letterSpacing: 4, color: 'var(--primary)', marginBottom: 4 }}>FIN DE PARTIE</p>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent)', letterSpacing: 2, margin: 0, textShadow: '2px 2px 0 rgba(0,0,0,0.7)' }}>
           XP & RÉCOMPENSES
         </h1>
       </div>
 
       {/* Classement */}
       {lbData && (
-        <div style={{
-          background: '#06060f',
-          border: '1px solid #1a0a3a',
-          borderRadius: 8,
-          padding: '0.75rem 1rem',
-          width: '100%',
-          maxWidth: 400,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <span style={{ fontSize: 9, letterSpacing: 3, color: 'rgba(255,255,255,0.4)' }}>
+        <div style={{ ...pixelPanel(), padding: '0.75rem 1rem', width: '100%', maxWidth: 400, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 9, letterSpacing: 3, color: 'var(--text-muted)' }}>
             CLASSEMENT {data.mode.toUpperCase()}
           </span>
-          <span style={{ fontSize: 16, fontWeight: 700, color: '#ffd700' }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>
             #{lbData.rank}
           </span>
         </div>
@@ -304,33 +280,18 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
 
       {/* Section XP */}
       {isLoading ? (
-        <div style={{
-          background: '#0d0020',
-          border: '1px solid #2a0a40',
-          borderRadius: 8,
-          padding: '1.25rem',
-          width: '100%',
-          maxWidth: 400,
-          textAlign: 'center',
-        }}>
-          <p style={{ fontSize: 11, color: '#9b59ff' }}>Calcul XP...</p>
+        <div style={{ ...pixelPanel(), padding: '1.25rem', width: '100%', maxWidth: 400, textAlign: 'center' }}>
+          <p style={{ fontSize: 11, color: 'var(--primary)' }}>Calcul XP...</p>
         </div>
       ) : (
-        <div style={{
-          background: '#0d0020',
-          border: '1px solid #9b59ff',
-          borderRadius: 8,
-          padding: '1.25rem',
-          width: '100%',
-          maxWidth: 400,
-        }}>
+        <div style={{ ...pixelPanel('var(--primary)'), padding: '1.25rem', width: '100%', maxWidth: 400 }}>
           {/* XP gagné */}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontSize: 10, letterSpacing: 2, color: 'rgba(255,255,255,0.5)' }}>XP GAGNÉ</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#9b59ff' }}>
+            <span style={{ fontSize: 10, letterSpacing: 2, color: 'var(--text-muted)' }}>XP GAGNÉ</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>
               {data.score} ÷ 10 = +{xpGained}
               {xpGained >= 28 && (
-                <span style={{ fontSize: 9, marginLeft: 6, color: '#ffd700' }}>CAP ATTEINT</span>
+                <span style={{ fontSize: 9, marginLeft: 6, color: 'var(--accent)' }}>CAP ATTEINT</span>
               )}
             </span>
           </div>
@@ -338,7 +299,7 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
           {/* Barre XP */}
           <XPBar current={xpInLevel} max={xpNeeded} />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-            <span style={{ fontSize: 9, color: '#9b59ff', fontWeight: 700 }}>
+            <span style={{ fontSize: 9, color: 'var(--primary)', fontWeight: 700 }}>
               NIVEAU {xpLevel} · {prestige.toUpperCase()}
             </span>
             <span style={{ fontSize: 9, color: 'rgba(155,89,255,0.6)' }}>
@@ -349,10 +310,8 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
           {/* Level up */}
           {leveledUp && (
             <div style={{
+              ...pixelPanel('var(--accent)'),
               marginTop: 10,
-              background: '#1a0040',
-              border: '2px solid #ffd700',
-              borderRadius: 6,
               padding: '0.5rem 0.75rem',
               display: 'flex',
               alignItems: 'center',
@@ -360,7 +319,7 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
             }}>
               <span style={{ fontSize: 16 }}>⬆️</span>
               <div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#ffd700', margin: 0 }}>LEVEL UP !</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', margin: 0 }}>LEVEL UP !</p>
                 <p style={{ fontSize: 10, color: 'rgba(255,215,0,0.7)', margin: 0 }}>
                   Niveau {xpLevel} débloqué
                 </p>
@@ -373,31 +332,17 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
       {/* Unlocks */}
       {unlocks.length > 0 && (
         <div style={{ width: '100%', maxWidth: 400 }}>
-          <p style={{ fontSize: 8, letterSpacing: 3, color: 'rgba(255,255,255,0.3)', marginBottom: 8 }}>
+          <p style={{ fontSize: 8, letterSpacing: 3, color: 'var(--text-muted)', marginBottom: 8 }}>
             NOUVEAUX ITEMS DÉBLOQUÉS
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {unlocks.map(item => (
-              <div
-                key={item.id}
-                style={{
-                  background: '#0d0020',
-                  border: `1px solid ${RARITY_COLOR[item.rarity] || '#888'}`,
-                  borderRadius: 6,
-                  padding: '0.75rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
+              <div key={item.id} style={{ ...pixelPanel(RARITY_COLOR[item.rarity] || '#888'), padding: '0.75rem', display: 'flex', alignItems: 'center', gap: 12 }}>
                 {item.asset_url ? (
-                  <img src={item.asset_url} alt={item.name} style={{ width: 44, height: 44, borderRadius: 4 }} />
+                  <img src={item.asset_url} alt={item.name} style={{ width: 44, height: 44, imageRendering: 'pixelated' }} />
                 ) : (
                   <div style={{
                     width: 44, height: 44,
-                    background: '#1a0040',
-                    borderRadius: 4,
-                    border: `1px solid ${RARITY_COLOR[item.rarity]}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 18,
                   }}>
@@ -415,8 +360,7 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
                   fontWeight: 700,
                   color: RARITY_COLOR[item.rarity],
                   background: `${RARITY_COLOR[item.rarity]}22`,
-                  border: `1px solid ${RARITY_COLOR[item.rarity]}`,
-                  borderRadius: 3,
+                  boxShadow: `0 0 0 1px ${RARITY_COLOR[item.rarity]}`,
                   padding: '2px 6px',
                   letterSpacing: 1,
                   textTransform: 'uppercase',
@@ -431,38 +375,10 @@ export default function GameOverScreen({ data, runId, playerId, onReplay, onBack
 
       {/* Boutons bas */}
       <div style={{ width: '100%', maxWidth: 400, display: 'flex', gap: 8, marginTop: 'auto', paddingTop: '1rem' }}>
-        <button
-          onClick={onReplay}
-          style={{
-            flex: 1,
-            padding: '0.75rem',
-            background: '#08001a',
-            border: '1px solid #2a0a40',
-            borderRadius: 4,
-            color: '#9b59ff',
-            fontWeight: 700,
-            fontSize: 12,
-            letterSpacing: 2,
-            cursor: 'pointer',
-          }}
-        >
+        <button className="btn btn-secondary" onClick={onReplay} style={{ flex: 1, fontSize: 12, letterSpacing: 2 }}>
           REJOUER
         </button>
-        <button
-          onClick={onBackToHome}
-          style={{
-            flex: 1,
-            padding: '0.75rem',
-            background: '#0d0020',
-            border: '2px solid #ffd700',
-            borderRadius: 4,
-            color: '#ffd700',
-            fontWeight: 700,
-            fontSize: 12,
-            letterSpacing: 2,
-            cursor: 'pointer',
-          }}
-        >
+        <button className="btn btn-primary" onClick={onBackToHome} style={{ flex: 1, fontSize: 12, letterSpacing: 2 }}>
           ACCUEIL
         </button>
       </div>

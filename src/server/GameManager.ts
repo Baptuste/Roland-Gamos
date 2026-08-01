@@ -5,6 +5,7 @@ import { GameService } from '../services/GameService';
 import { ProposalResult } from '../services/GameService';
 import { createTurn } from '../types/Turn';
 import { handleGameFinish } from '../services/GameFinishService';
+import { gameDataStore } from '../services/GameDataStore';
 
 /**
  * Gestionnaire de parties multijoueurs
@@ -654,6 +655,21 @@ export class GameManager {
       winnerIds = new Set(activePlayers.map((p) => p.id));
     }
 
+    // Chaîne partagée par toute la partie — un seul calcul, réutilisé pour
+    // chaque joueur (contrairement au Solo, il n'y a pas de "seedArtist" à
+    // part : le premier tour de la partie sert d'ouverture). game.turns ne
+    // garde que artistName (pas de gameId, cf. types/Turn.ts), d'où la
+    // résolution via gameDataStore.resolveArtist — même mécanisme que
+    // BotManager pour retrouver l'artiste depuis son nom.
+    const encounteredGeniusIds = Array.from(
+      new Set(
+        game.turns
+          .filter((t) => t.isValid)
+          .map((t) => gameDataStore.resolveArtist(t.artistName)?.id)
+          .filter((id): id is number => typeof id === 'number')
+      )
+    );
+
     for (const player of game.players) {
       handleGameFinish({
         playerId: player.persistentId || player.id,
@@ -662,6 +678,7 @@ export class GameManager {
         turns: game.usedArtists.length,
         mode: 'Multijoueur',
         multiWin: winnerIds.has(player.id),
+        encounteredGeniusIds,
       }).then((result) => {
         // Sans ça, le joueur n'a aucun retour visuel sur l'XP gagnée en
         // Multijoueur (contrairement au Solo) — cf. retour utilisateur.

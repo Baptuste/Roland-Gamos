@@ -1,9 +1,5 @@
 import { SoloMove } from '../types/SoloMove';
-
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL ||
-  (import.meta.env.PROD || window.location.hostname !== 'localhost'
-    ? window.location.origin
-    : 'http://localhost:3001');
+import { BACKEND_URL as API_BASE_URL } from '../../services/backendUrl';
 
 export interface BotGameRun {
   id: string;

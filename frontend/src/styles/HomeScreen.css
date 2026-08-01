@@ -96,29 +96,44 @@
 .mode-btn {
   flex: 1;
   padding: 0.75rem;
-  background: var(--bg-input);
+  background: linear-gradient(180deg, #2b2620 0% 55%, #15120e 55% 100%);
   color: var(--text-muted);
-  border: 2px solid var(--border);
-  border-radius: 4px;
+  border: none;
+  border-radius: 0;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: transform 0.08s steps(2), box-shadow 0.08s steps(2), color 0.12s;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  clip-path: polygon(0 7px, 7px 7px, 7px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px));
+  box-shadow:
+    0 0 0 2px #0a0705,
+    0 0 0 4px #5a4a38,
+    4px 4px 0 0 rgba(0, 0, 0, 0.7);
+  transform: translate(0, 0);
 }
 
 .mode-btn:hover {
-  border-color: var(--primary);
   color: var(--text);
+  transform: translate(-2px, -2px);
+  box-shadow:
+    0 0 0 2px #0a0705,
+    0 0 0 4px var(--accent),
+    6px 6px 0 0 rgba(0, 0, 0, 0.7),
+    0 0 16px rgba(255, 178, 74, 0.3);
 }
 
 .mode-btn.active {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-  border-color: var(--primary);
-  color: white;
-  box-shadow: var(--neon-purple);
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  background: linear-gradient(180deg, #4a3319 0% 55%, #1c1108 55% 100%);
+  color: #ffe9b8;
+  box-shadow:
+    0 0 0 2px #0a0705,
+    0 0 0 4px #fff3c4,
+    4px 4px 0 0 rgba(0, 0, 0, 0.75),
+    0 0 22px rgba(255, 178, 60, 0.5);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.7);
+  transform: translate(-1px, -1px);
 }
 
 /* Form */

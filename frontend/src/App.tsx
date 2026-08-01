@@ -4,13 +4,13 @@ import MultiplayerGameScreen from './screens/MultiplayerGameScreen';
 import SoloInfiniteScreen from './screens/SoloInfiniteScreen';
 import SoloBotScreen from './screens/SoloBotScreen';
 import LeaderboardScreen from './screens/LeaderboardScreen';
-import StatsScreen from './screens/StatsScreen';
+import CasierScreen from './screens/CasierScreen';
+import GalaxyScreen from './screens/GalaxyScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { Game, Player, GameStatus } from './shared/types';
 import { socketService } from './services/socketService';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+import { BACKEND_URL } from './services/backendUrl';
 
 // Clés pour le localStorage
 const STORAGE_KEYS = {
@@ -31,7 +31,7 @@ function getSoloPlayerId(): string {
   return uuid;
 }
 
-type Screen = 'home' | 'solo' | 'bot' | 'leaderboard' | 'stats' | 'multiplayer' | 'profile' | 'settings';
+type Screen = 'home' | 'solo' | 'bot' | 'leaderboard' | 'casier' | 'galaxy' | 'multiplayer' | 'profile' | 'settings';
 
 function App() {
   const [currentGame, setCurrentGame] = useState<Game | null>(null);
@@ -231,6 +231,26 @@ function App() {
     };
   }, [currentGame?.id, currentPlayer?.id]);
 
+  // Renvoyer l'identité du joueur au serveur si le socket se reconnecte tout
+  // seul (coupure réseau) pendant qu'une partie est active — sans ça,
+  // GameManager garde l'ancien socket id mort et peut supprimer la partie
+  // (et son code) au bout de LOBBY_DISCONNECT_GRACE_MS si personne d'autre
+  // n'est présent. La logique de montage dans le useEffect plus haut ne
+  // couvre que le rechargement de page, pas ce cas.
+  useEffect(() => {
+    if (!currentGame || !currentPlayer) return;
+
+    const resendIdentity = () => {
+      socketService.emit('reconnect-game', {
+        gameCode: gameCode || localStorage.getItem(STORAGE_KEYS.GAME_CODE) || '',
+        playerId: currentPlayer.id,
+      });
+    };
+
+    socketService.onSocketReconnect(resendIdentity);
+    return () => socketService.offSocketReconnect(resendIdentity);
+  }, [currentGame?.id, currentPlayer?.id, gameCode]);
+
   const handleGameJoined = (game: Game, player: Player, code?: string) => {
     setCurrentGame(game);
     setCurrentPlayer(player);
@@ -254,6 +274,16 @@ function App() {
     // utilisée par Statistiques/Classement, qui doivent rester consultables
     // après une partie Multijoueur sans repasser par le Solo.
     setCurrentScreen('home');
+  };
+
+  const handleShowCasier = (playerName: string) => {
+    setSoloPlayerName(playerName);
+    fetch(`${BACKEND_URL}/api/players/identify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: soloPlayerId, pseudo: playerName }),
+    }).catch(() => {});
+    setCurrentScreen('casier');
   };
 
   const handleShowProfile = (playerName: string) => {
@@ -305,8 +335,18 @@ function App() {
     return <LeaderboardScreen onBackToHome={handleBackToHome} />;
   }
 
-  if (currentScreen === 'stats') {
-    return <StatsScreen playerName={soloPlayerName || undefined} onBackToHome={handleBackToHome} />;
+  if (currentScreen === 'casier') {
+    return (
+      <CasierScreen
+        playerId={soloPlayerId}
+        playerName={soloPlayerName || ''}
+        onBackToHome={handleBackToHome}
+      />
+    );
+  }
+
+  if (currentScreen === 'galaxy') {
+    return <GalaxyScreen playerId={soloPlayerId} onBackToHome={handleBackToHome} />;
   }
 
   if (currentScreen === 'profile') {
@@ -365,7 +405,8 @@ function App() {
           onStartSolo={handleStartSolo}
           onStartBot={handleStartBot}
           onShowLeaderboard={() => setCurrentScreen('leaderboard')}
-          onShowStats={() => setCurrentScreen('stats')}
+          onShowGalaxy={() => setCurrentScreen('galaxy')}
+          onShowCasier={handleShowCasier}
           onShowProfile={handleShowProfile}
           initialGame={currentGame}
           initialPlayer={currentPlayer}
@@ -390,7 +431,8 @@ function App() {
       onStartSolo={handleStartSolo}
       onStartBot={handleStartBot}
       onShowLeaderboard={() => setCurrentScreen('leaderboard')}
-      onShowStats={() => setCurrentScreen('stats')}
+      onShowGalaxy={() => setCurrentScreen('galaxy')}
+      onShowCasier={handleShowCasier}
       onShowProfile={handleShowProfile}
       onBackToHome={handleBackToHome}
       persistentPlayerId={soloPlayerId}

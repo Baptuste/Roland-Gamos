@@ -101,6 +101,21 @@ interface LastfmArtistInfo {
 }
 
 /**
+ * Normalise les guillemets/apostrophes typographiques (venus de Genius) vers
+ * leurs équivalents ASCII droits. Bug trouvé le 2026-08-01 : Last.fm indexe
+ * "Rim'K" (apostrophe droite) et "Rim’K" (typographique) comme deux artistes
+ * différents — le second est une page quasi vide (66 auditeurs vs 76 045 pour
+ * la bonne page). Sans cette normalisation, tout artiste dont le nom contient
+ * une apostrophe/un guillemet typographique matche silencieusement la mauvaise
+ * page Last.fm (197 artistes concernés sur la base actuelle).
+ */
+export function normalizeArtistNameForLastfm(name: string): string {
+  return name
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"');
+}
+
+/**
  * Interroge Last.fm artist.getinfo. Retourne null si non trouvé / erreur / clé absente
  * (log mais ne fait jamais planter le pipeline pour un seul artiste manquant).
  */
@@ -115,7 +130,7 @@ export async function fetchLastfmArtistInfo(
   if (params.mbid) {
     url.searchParams.set('mbid', params.mbid);
   } else if (params.name) {
-    url.searchParams.set('artist', params.name);
+    url.searchParams.set('artist', normalizeArtistNameForLastfm(params.name));
   } else {
     return null;
   }
